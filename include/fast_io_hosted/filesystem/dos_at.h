@@ -17,6 +17,8 @@ extern int my_dos_rename(char const *oldname, char const *newname) noexcept __as
 // Because of limitations of MS-DOS, this function doesn't really link two files together.
 // However, it simulates a real link by copying the file at exists to new.
 extern int my_dos_link(char const *exists, char const *newname) noexcept __asm__("_link");
+// The symlink of djgpp only generates a 510-byte file and does not exist as a soft link, so it
+// will be disabled later.
 extern int my_dos_symlink(char const *exists, char const *newname) noexcept __asm__("_symlink");
 extern int my_dos_chmod(char const *path, mode_t mode) noexcept __asm__("_chmod");
 extern int my_dos_utime(char const *file, utimbuf const *time) noexcept __asm__("_utime");
@@ -136,9 +138,13 @@ inline auto dos22_api_dispatcher(int olddirfd, char const *oldpath, int newdirfd
 	}
 }
 
-inline void dos_symlinkat_impl(char const *oldpath, int newdirfd, char const *newpath)
+inline void dos_symlinkat_impl([[maybe_unused]] char const *oldpath, [[maybe_unused]] int newdirfd, [[maybe_unused]] char const *newpath)
 {
+#if defined(FAST_IO_USE_DJGPP_SYMLINK)
 	::fast_io::system_call_throw_error(::fast_io::posix::my_dos_symlink(oldpath, ::fast_io::details::my_dos_concat_tlc_path(newdirfd, newpath).c_str()));
+#else
+	throw_posix_error(ENOSYS);
+#endif
 }
 
 template <posix_api_12 dsp, typename... Args>
@@ -203,7 +209,6 @@ inline
 		[[fallthrough]];
 	case utime_flags::omit:
 		throw_posix_error(EINVAL);
-		::fast_io::unreachable();
 	default:
 		return ::fast_io::details::unix_timestamp_to_time_t(opt.timestamp);
 	}
