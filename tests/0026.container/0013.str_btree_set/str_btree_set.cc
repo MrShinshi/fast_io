@@ -41,8 +41,13 @@ int main()
 	}
 
 	::fast_io::io::print("\nreverse:\n");
+/*
+// ::std::ranges::reverse_view does not pass CI
 	for (auto const &e : ::std::ranges::reverse_view(bset))
+*/
+	for(auto i{bset.crbegin()},ed{bset.crend()};i!=ed;++i)
 	{
+		auto& e{*i};
 		::fast_io::io::println(e);
 	}
 
