@@ -139,7 +139,6 @@ inline constexpr bool str_btree_insert_key_cold(nodetype *node, ::std::size_t po
 
 
 	auto keys{node->keys};
-	auto n{node->size};
 	auto keysit{keys + pos};
 	auto keysed{keys + keys_number};
 
