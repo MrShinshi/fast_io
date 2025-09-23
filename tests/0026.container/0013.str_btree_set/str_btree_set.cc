@@ -47,7 +47,7 @@ int main()
 */
 	for(auto i{bset.crbegin()},ed{bset.crend()};i!=ed;++i)
 	{
-		auto& e{*i};
+		auto const& e{*i};
 		::fast_io::io::println(e);
 	}
 
