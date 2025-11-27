@@ -457,7 +457,7 @@ private:
 			}
 			else
 			{
-				typed_allocator_type::deallocate(ptr, 1);
+				typed_allocator_type::deallocate_n(ptr, 1);
 			}
 		}
 	};
@@ -614,6 +614,24 @@ public:
 	[[nodiscard]] inline constexpr bool is_empty() const noexcept
 	{
 		return imp.next == __builtin_addressof(imp);
+	}
+
+	/**
+	 * @brief Checks if the list contains only one element.
+	 * @return true if the list contains only one element, false otherwise.
+	 */
+	[[nodiscard]] inline constexpr bool is_single() const noexcept
+	{
+		return imp.next == imp.prev && imp.next != __builtin_addressof(imp);
+	}
+
+	/**
+	 * @brief Checks if the list contains multiple elements (>= 2).
+	 * @return true if the list contains multiple elements, false otherwise.
+	 */
+	[[nodiscard]] inline constexpr bool has_multiple() const noexcept
+	{
+		return imp.next != imp.prev;
 	}
 
 	[[nodiscard]] static inline constexpr size_type max_size() noexcept
