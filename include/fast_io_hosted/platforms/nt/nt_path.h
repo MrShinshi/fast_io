@@ -99,22 +99,18 @@ inline auto nt_call_invoke_with_directory_handle_impl(void *directory, char_type
 		= char16_t const *;
 	if constexpr (::std::same_as<char_type, char16_t>)
 	{
-		using char16_may_alias_ptr
-#if __has_cpp_attribute(__gnu__::__may_alias__)
-			[[__gnu__::__may_alias__]]
-#endif
-			= char16_t *;
 		::std::uint_least16_t const bytes(strlen_to_nt_filename_bytes(filename_len));
 
 		// Since this involves escaping Win32-style paths to NT, all forward slashes '/' are converted to backslashes '\\'.
 
 		auto const char16_t_size{bytes / sizeof(char16_t)};
 
-		rtl_alloc_guard rtl_guard{rtl_alloc_guard::allocator::allocate(char16_t_size)};
+		rtl_alloc_guard rtl_guard{rtl_alloc_guard::allocator::allocate(char16_t_size + 1u)};
 
 		::fast_io::freestanding::nonoverlapped_bytes_copy_n(reinterpret_cast<::std::byte const *>(filename), bytes, reinterpret_cast<::std::byte *>(rtl_guard.ptr));
 
-		for (auto curr{rtl_guard.ptr}; curr != rtl_guard.ptr + char16_t_size; ++curr)
+		auto curr{rtl_guard.ptr};
+		for (; curr != rtl_guard.ptr + char16_t_size; ++curr)
 		{
 			if (*curr == u'/')
 			{
@@ -122,8 +118,12 @@ inline auto nt_call_invoke_with_directory_handle_impl(void *directory, char_type
 			}
 		}
 
+		*curr = u'\0';
+
 		win32::nt::unicode_string relative_path{
-			.Length = bytes, .MaximumLength = bytes, .Buffer = rtl_guard.ptr};
+			.Length = bytes,
+			.MaximumLength = static_cast<::std::uint_least16_t>(bytes + sizeof(char16_t)),
+			.Buffer = rtl_guard.ptr};
 		return callback(directory, __builtin_addressof(relative_path));
 	}
 	else if constexpr (sizeof(char_type) == sizeof(char16_t))
