@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 	fast_io::u8obuf_file obf(u"password.txt");
 	fast_io::ibuf_white_hole_engine eng;
 	std::uniform_int_distribution<std::size_t> ud(0, 61);
-	std::uniform_int_distribution<std::size_t> rlen(8, 20);
+	std::uniform_int_distribution<std::size_t> rlen(12, 20);
 	for (std::size_t i{}; i != n; ++i)
 	{
 		for (std::size_t j{}, s(rlen(eng)); j != s; ++j)

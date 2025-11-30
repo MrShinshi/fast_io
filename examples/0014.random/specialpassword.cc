@@ -15,7 +15,7 @@ int main(int argc, char **argv)
     fast_io::u8obuf_file obf(u"specialpassword.txt");
     fast_io::ibuf_white_hole_engine eng;
     std::uniform_int_distribution<std::size_t> ud(0, 77); // Expanded range for special characters
-    std::uniform_int_distribution<std::size_t> rlen(8, 20);
+    std::uniform_int_distribution<std::size_t> rlen(12, 20);
 
     // Use constexpr fast_io::array for compile-time safety
     constexpr fast_io::array<char8_t, 16> special_chars{u8'!', u8'@', u8'#', u8'$', u8'%', u8'^', u8'&', u8'*',
