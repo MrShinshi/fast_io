@@ -9,6 +9,20 @@
 
 using namespace fast_io::io;
 
+// NOTE:
+// This benchmark compares the core integer parsing routines under identical preconditions.
+// For each line, the pointer `p` is positioned at the first decimal digit; there is no
+// leading whitespace, sign character, or base prefix in the [p, end) slice.
+// The fast_io branch calls
+//   scan_int_contiguous_none_simd_space_part_define_impl<10, char>(p, end, v);
+// the std::from_chars and fast_float::from_chars integer overloads are invoked on the same
+// [p, end) range.
+// By specification, std::from_chars and fast_float::from_chars for integer types do not
+// skip leading whitespace, and scan_int_contiguous_none_simd_space_part_define_impl makes
+// the same assumption that any preceding whitespace has already been consumed. Thus the
+// starting conditions and termination rules are fully aligned, providing a fair comparison
+// of "decimal digit substring → uint64_t" parsing performance.
+
 static std::string make_numbers_buffer(std::size_t n)
 {
 	std::string s;
@@ -85,7 +99,60 @@ int main()
 	}
 
 
-	// fast_io char_digit_to_literal
+	// fast_io core sto (dec) - scalar/SWAR path:
+	// scan_int_contiguous_none_simd_space_part_define_impl (no SSE4.1 fast path)
+	{
+		fast_io::timer t(u8"fastio_scan_int_none_simd_dec");
+		std::uint64_t sum{};
+		char const *p = begin;
+		while (p < end)
+		{
+			std::uint64_t v{};
+			auto res = ::fast_io::details::scan_int_contiguous_none_simd_space_part_define_impl<10, char>(
+				p, end, v);
+			if (res.code != fast_io::parse_code::ok)
+			{
+				break;
+			}
+			sum += v;
+			p = res.iter;
+			if (p < end && *p == '\n')
+			{
+				++p;
+			}
+		}
+		std::uint64_t volatile sink = sum;
+		(void)sink;
+	}
+
+#if defined(__SSE4_1__) && (defined(__x86_64__) || defined(_M_AMD64))
+	// fast_io core sto (dec) - SSE4.1-accelerated path:
+	// scan_int_contiguous_none_space_part_define_impl (may use sse_parse for base-10)
+	{
+		fast_io::timer t(u8"fastio_scan_int_sse4_dec");
+		std::uint64_t sum{};
+		char const *p = begin;
+		while (p < end)
+		{
+			std::uint64_t v{};
+			auto res = ::fast_io::details::scan_int_contiguous_none_space_part_define_impl<10>(p, end, v);
+			if (res.code != fast_io::parse_code::ok)
+			{
+				break;
+			}
+			sum += v;
+			p = res.iter;
+			if (p < end && *p == '\n')
+			{
+				++p;
+			}
+		}
+		std::uint64_t volatile sink = sum;
+		(void)sink;
+	}
+#endif
+
+	// fast_io char_digit_to_literal (hex)
 	{
 		fast_io::timer t(u8"fastio_char_digit_to_literal");
 		std::uint64_t sum{};
@@ -112,6 +179,7 @@ int main()
 		(void)sink;
 	}
 
+
 	// fast_float
 	{
 		fast_io::timer t(u8"fast_float_from_chars");
@@ -131,5 +199,4 @@ int main()
 		std::uint64_t volatile sink = sum;
 		(void)sink;
 	}
-
 }
