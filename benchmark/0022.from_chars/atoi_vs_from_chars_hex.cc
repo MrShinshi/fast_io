@@ -10,6 +10,21 @@
 
 using namespace fast_io::io;
 
+// NOTE:
+// This benchmark compares core integer parsing in base 16 under aligned conditions.
+// For each line, the pointer `p` is positioned at the first hexadecimal digit; there is no
+// leading whitespace or base prefix in the [p, end) slice, and the 0–9/A–F/a–f pattern of
+// each line is identical for all libraries. Newline characters '\n' are skipped manually.
+// The fast_io branch calls
+//   scan_int_contiguous_none_simd_space_part_define_impl<16, char>(p, end, v);
+// the std::from_chars and fast_float::from_chars integer overloads are invoked on the same
+// [p, end) range.
+// As with the decimal benchmark, std::from_chars and fast_float::from_chars for integers
+// do not skip leading whitespace, and scan_int_contiguous_none_simd_space_part_define_impl
+// assumes that any preceding whitespace has already been consumed. The preconditions are
+// therefore identical, making this a fair comparison of "hex digit substring → uint64_t"
+// parsing performance.
+
 static std::string make_hex_numbers_buffer(std::size_t n)
 {
 	std::string s;
@@ -21,6 +36,17 @@ static std::string make_hex_numbers_buffer(std::size_t n)
 		auto *first = s.data() + old;
 		auto *last = s.data() + s.size();
 		auto res = std::to_chars(first, last - 1, i, 16);
+		// mix lowercase/uppercase hex digits in the buffer
+		if ((i & 1u) != 0u)
+		{
+			for (auto p = first; p != res.ptr; ++p)
+			{
+				if (*p >= 'a' && *p <= 'f')
+				{
+					*p = static_cast<char>(*p - 'a' + 'A');
+				}
+			}
+		}
 		*res.ptr = '\n';
 		s.resize(static_cast<std::size_t>(res.ptr - s.data() + 1));
 	}
@@ -74,6 +100,31 @@ int main()
 			auto res = std::from_chars(p, end, v, 16);
 			sum += v;
 			p = res.ptr;
+			if (p < end && *p == '\n')
+			{
+				++p;
+			}
+		}
+		std::uint64_t volatile sink = sum;
+		(void)sink;
+	}
+
+	// fast_io core sto (hex) - scan_int_contiguous_none_simd_space_part_define_impl
+	{
+		fast_io::timer t(u8"fastio_scan_int_none_simd_hex (SIMT)");
+		std::uint64_t sum{};
+		char const *p = begin;
+		while (p < end)
+		{
+			std::uint64_t v{};
+			auto res = ::fast_io::details::scan_int_contiguous_none_simd_space_part_define_impl<16, char>(
+				p, end, v);
+			if (res.code != fast_io::parse_code::ok)
+			{
+				break;
+			}
+			sum += v;
+			p = res.iter;
 			if (p < end && *p == '\n')
 			{
 				++p;
