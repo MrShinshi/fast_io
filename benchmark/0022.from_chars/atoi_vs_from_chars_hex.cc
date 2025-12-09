@@ -7,6 +7,7 @@
 #include <charconv>
 #include <cstdlib>
 #include <fast_float/fast_float.h>
+#include <limits>
 
 using namespace fast_io::io;
 
@@ -53,6 +54,80 @@ static std::string make_hex_numbers_buffer(std::size_t n)
 	return s;
 }
 
+static std::string make_fixed_hex_numbers_buffer(std::size_t digits, std::size_t n)
+{
+	if (digits == 0 || digits > 16)
+	{
+		return {};
+	}
+
+	constexpr std::uint64_t pow16[16]{
+		1ull,
+		16ull,
+		256ull,
+		4096ull,
+		65536ull,
+		1048576ull,
+		16777216ull,
+		268435456ull,
+		4294967296ull,
+		68719476736ull,
+		1099511627776ull,
+		17592186044416ull,
+		281474976710656ull,
+		4503599627370496ull,
+		72057594037927936ull,
+		1152921504606846976ull};
+
+	std::string s;
+	s.reserve(n * (digits + 1));
+
+	std::uint64_t lo{};
+	std::uint64_t hi{};
+
+	if (digits == 1)
+	{
+		lo = 0;
+		hi = 0xFu;
+	}
+	else if (digits < 16)
+	{
+		lo = pow16[digits - 1];
+		hi = pow16[digits] - 1;
+	}
+	else
+	{
+		lo = pow16[15];
+		hi = (std::numeric_limits<std::uint64_t>::max)();
+	}
+
+	std::uint64_t count = hi - lo + 1;
+
+	for (std::size_t i{}; i != n; ++i)
+	{
+		auto old = s.size();
+		s.resize(old + 32);
+		auto *first = s.data() + old;
+		auto *last = s.data() + s.size();
+		std::uint64_t value = lo + static_cast<std::uint64_t>(i % count);
+		auto res = std::to_chars(first, last - 1, value, 16);
+		// mix lowercase/uppercase hex digits in the buffer
+		if ((value & 1u) != 0u)
+		{
+			for (auto p = first; p != res.ptr; ++p)
+			{
+				if (*p >= 'a' && *p <= 'f')
+				{
+					*p = static_cast<char>(*p - 'a' + 'A');
+				}
+			}
+		}
+		*res.ptr = '\n';
+		s.resize(static_cast<std::size_t>(res.ptr - s.data() + 1));
+	}
+	return s;
+}
+
 int main()
 {
 	constexpr std::size_t N = 10'000'000;
@@ -66,7 +141,7 @@ int main()
 		{
 			lines += (*p == '\n');
 		}
-		fast_io::println("lines=", lines);
+		fast_io::perrln("lines=", lines);
 	}
 
 	// strtoul (hex)
@@ -179,5 +254,139 @@ int main()
 		}
 		std::uint64_t volatile sink = sum;
 		(void)sink;
+	}
+
+	// Per-digit hex benchmarks: 1-digit up to theoretical max hexadecimal digits of uint64_t (16)
+	{
+		constexpr std::size_t max_hex_digits = 16;
+		for (std::size_t digits = 1; digits <= max_hex_digits; ++digits)
+		{
+			auto buf_fixed = make_fixed_hex_numbers_buffer(digits, N);
+			char const *fixed_begin = buf_fixed.data();
+			char const *fixed_end = buf_fixed.data() + buf_fixed.size();
+
+			fast_io::perrln("\n\nfixed_hex_digits=", digits, " lines=", N);
+
+			{
+				std::size_t lines{};
+				for (char const *p = fixed_begin; p < fixed_end; ++p)
+				{
+					lines += (*p == '\n');
+				}
+				fast_io::perrln("lines=", lines);
+			}
+
+			// strtoul (hex) on fixed-width hex substrings
+			{
+				fast_io::timer t(u8"strtoul_hex_fixed");
+				std::uint64_t sum{};
+				char const *p = fixed_begin;
+				while (p < fixed_end)
+				{
+					char *endptr{};
+					auto v = std::strtoul(p, &endptr, 16);
+					sum += static_cast<std::uint64_t>(v);
+					p = endptr;
+					if (p < fixed_end && *p == '\n')
+					{
+						++p;
+					}
+				}
+				std::uint64_t volatile sink = sum;
+				(void)sink;
+			}
+
+			// std::from_chars (hex) on fixed-width hex substrings
+			{
+				fast_io::timer t(u8"std_from_chars_hex_fixed");
+				std::uint64_t sum{};
+				char const *p = fixed_begin;
+				while (p < fixed_end)
+				{
+					std::uint64_t v{};
+					auto res = std::from_chars(p, fixed_end, v, 16);
+					sum += v;
+					p = res.ptr;
+					if (p < fixed_end && *p == '\n')
+					{
+						++p;
+					}
+				}
+				std::uint64_t volatile sink = sum;
+				(void)sink;
+			}
+
+			// fast_io char_digit_to_literal (hex) on fixed-width hex substrings
+			{
+				fast_io::timer t(u8"fastio_char_digit_to_literal_hex_fixed");
+				std::uint64_t sum{};
+				char const *p = fixed_begin;
+				while (p < fixed_end)
+				{
+					using UCh = std::make_unsigned_t<char>;
+					std::uint64_t v{};
+					char const *q = p;
+					while (q < fixed_end && *q != '\n')
+					{
+						UCh ch = static_cast<UCh>(*q);
+						if (fast_io::details::char_digit_to_literal<16, char>(ch))
+						{
+							break;
+						}
+						v = (v << 4) + static_cast<std::uint64_t>(ch);
+						++q;
+					}
+					sum += v;
+					p = (q < fixed_end ? q + 1 : q);
+				}
+				std::uint64_t volatile sink = sum;
+				(void)sink;
+			}
+
+			// fast_io core sto (hex) on fixed-width hex substrings
+			{
+				fast_io::timer t(u8"fastio_scan_int_none_simd_hex_fixed");
+				std::uint64_t sum{};
+				char const *p = fixed_begin;
+				while (p < fixed_end)
+				{
+					std::uint64_t v{};
+					auto res = ::fast_io::details::scan_int_contiguous_none_simd_space_part_define_impl<16, char>(
+						p, fixed_end, v);
+					if (res.code != fast_io::parse_code::ok)
+					{
+						break;
+					}
+					sum += v;
+					p = res.iter;
+					if (p < fixed_end && *p == '\n')
+					{
+						++p;
+					}
+				}
+				std::uint64_t volatile sink = sum;
+				(void)sink;
+			}
+
+			// fast_float (hex) on fixed-width hex substrings
+			{
+				fast_io::timer t(u8"fast_float_from_chars_hex_fixed");
+				std::uint64_t sum{};
+				char const *p = fixed_begin;
+				while (p < fixed_end)
+				{
+					std::uint64_t v{};
+					auto res = fast_float::from_chars(p, fixed_end, v, 16);
+					sum += v;
+					p = res.ptr;
+					if (p < fixed_end && *p == '\n')
+					{
+						++p;
+					}
+				}
+				std::uint64_t volatile sink = sum;
+				(void)sink;
+			}
+		}
 	}
 }
