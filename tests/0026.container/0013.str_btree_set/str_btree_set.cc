@@ -76,7 +76,11 @@ int main()
 			::fast_io::io::println("found: ", *it);
 		}
 	}
+    for (::std::size_t i{};i!=::std::size(fruits);++i)
+    {
+		auto const& e{fruits[i]};
+        bset.erase_key(e);
+	}
 
-	bset.erase_key("apple");
-	//bset.erase_key("banana");
+	::fast_io::io::println("bset.is_empty():", bset.is_empty());
 }
