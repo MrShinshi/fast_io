@@ -364,25 +364,42 @@ inline constexpr bool str_btree_insert_key_with_root(::fast_io::containers::deta
 	return ::fast_io::containers::details::str_btree_insert_key_cold<allocator_type, keys_number>(node, pos, tempkey.ptr, tempkey.n, imp);
 }
 
-template <typename allocator_type, ::std::size_t keys_number>
-inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::btree_imp &imp,
-												::fast_io::containers::details::str_btree_set_common<keys_number> *node) noexcept
-{
+	template <typename allocator_type, ::std::size_t keys_number>
+	inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::btree_imp &imp,
+													::fast_io::containers::details::str_btree_set_common<keys_number> *node) noexcept
+	{
 	using nodeptr
 #if __has_cpp_attribute(__gnu__::__may_alias__)
 		[[__gnu__::__may_alias__]]
 #endif
 		= ::fast_io::containers::details::str_btree_set_common<keys_number> *;
-	using typed_allocator_type =
-		::fast_io::typed_generic_allocator_adapter<allocator_type,
-												   ::fast_io::containers::details::str_btree_set_common<keys_number>>;
+		using typed_allocator_type =
+			::fast_io::typed_generic_allocator_adapter<allocator_type,
+													   ::fast_io::containers::details::str_btree_set_common<keys_number>>;
 
-	constexpr ::std::size_t min_keys{keys_number >> 1u};
+		constexpr ::std::size_t min_keys{(keys_number >> 1u) - 1u};
 
-	auto current = node;
-	while (current && current->size < min_keys)
-	{
-		auto parent = static_cast<nodeptr>(current->parent);
+		auto fix_child_links = [](nodeptr parent_node) noexcept
+		{
+			if (parent_node == nullptr || parent_node->leaf)
+			{
+				return;
+			}
+			for (::std::size_t i{}; i <= parent_node->size; ++i)
+			{
+				auto child{static_cast<nodeptr>(parent_node->childrens[i])};
+				if (child)
+				{
+					child->parent = parent_node;
+					child->parent_pos = i;
+				}
+			}
+		};
+
+		auto current = node;
+		while (current && current->size < min_keys)
+		{
+			auto parent = static_cast<nodeptr>(current->parent);
 
 		// Case 1: current is root
 		if (!parent)
@@ -390,16 +407,17 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 			if (current->size == 0)
 			{
 				// If root has no keys, promote its only child (if any)
-				if (current->childrens[0])
-				{
-					imp.root = current->childrens[0];
-					auto newroot = static_cast<nodeptr>(imp.root);
-					newroot->parent = nullptr;
-				}
-				else
-				{
-					// Tree becomes empty
-					imp = {};
+					if (current->childrens[0])
+					{
+						imp.root = current->childrens[0];
+						auto newroot = static_cast<nodeptr>(imp.root);
+						newroot->parent = nullptr;
+						newroot->parent_pos = 0;
+					}
+					else
+					{
+						// Tree becomes empty
+						imp = {};
 				}
 				typed_allocator_type::deallocate_n(current, 1);
 			}
@@ -413,103 +431,180 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 		if (parpos != parent_size)
 		{
 			auto right = static_cast<nodeptr>(parent->childrens[parpos + 1]);
-			if (right->size > min_keys)
-			{
-				// Move parent key down into current
-				current->keys[current->size] = parent->keys[parpos];
-				++current->size;
+				if (right->size > min_keys)
+				{
+					auto const current_size_before{current->size};
+					// Move parent key down into current
+					current->keys[current_size_before] = parent->keys[parpos];
+					if (!current->leaf)
+					{
+						// Move right sibling's leftmost child into current's new last child slot
+						current->childrens[current_size_before + 1] = right->childrens[0];
+						auto moved_child{static_cast<nodeptr>(right->childrens[0])};
+						if (moved_child)
+						{
+							moved_child->parent = current;
+							moved_child->parent_pos = current_size_before + 1;
+						}
+						::fast_io::freestanding::overlapped_copy(
+							right->childrens + 1, right->childrens + right->size + 1, right->childrens);
+					}
+					++current->size;
 
-				// Update parent key to right sibling's leftmost
-				parent->keys[parpos] = right->keys[0];
+					// Update parent key to right sibling's leftmost
+					parent->keys[parpos] = right->keys[0];
 
-				// Shift right sibling's keys left
-				::fast_io::freestanding::overlapped_copy(
-					right->keys + 1, right->keys + right->size, right->keys);
-				--right->size;
-				return; // fixed
+					// Shift right sibling's keys left
+					::fast_io::freestanding::overlapped_copy(
+						right->keys + 1, right->keys + right->size, right->keys);
+					--right->size;
+					fix_child_links(current);
+					fix_child_links(right);
+					return; // fixed
+				}
 			}
-		}
 
-		// Try borrow from left sibling
+			// Try borrow from left sibling
 		if (parpos != 0)
 		{
 			auto left = static_cast<nodeptr>(parent->childrens[parpos - 1]);
-			if (left->size > min_keys)
-			{
-				// Shift current keys right
-				::fast_io::freestanding::overlapped_copy(
-					current->keys, current->keys + current->size, current->keys + 1);
+				if (left->size > min_keys)
+				{
+					auto const current_size_before{current->size};
+					auto const left_size_before{left->size};
+					// Shift current keys right
+					::fast_io::freestanding::overlapped_copy(
+						current->keys, current->keys + current_size_before, current->keys + 1);
+					if (!current->leaf)
+					{
+						// Shift current children right to make room for the borrowed child
+						::fast_io::freestanding::overlapped_copy(
+							current->childrens, current->childrens + current_size_before + 1, current->childrens + 1);
+						current->childrens[0] = left->childrens[left_size_before];
+						auto moved_child{static_cast<nodeptr>(left->childrens[left_size_before])};
+						if (moved_child)
+						{
+							moved_child->parent = current;
+							moved_child->parent_pos = 0;
+						}
+					}
 
-				// Move parent key down
-				current->keys[0] = parent->keys[parpos - 1];
-				++current->size;
+					// Move parent key down
+					current->keys[0] = parent->keys[parpos - 1];
+					++current->size;
 
-				// Update parent key to left sibling's rightmost
-				parent->keys[parpos - 1] = left->keys[left->size - 1];
-				--left->size;
-				return; // fixed
+					// Update parent key to left sibling's rightmost
+					parent->keys[parpos - 1] = left->keys[left_size_before - 1];
+					--left->size;
+					fix_child_links(current);
+					fix_child_links(left);
+					return; // fixed
+				}
 			}
-		}
 
-		// Merge: prefer right sibling
-		if (parpos != parent_size)
-		{
-			auto right = static_cast<nodeptr>(parent->childrens[parpos + 1]);
+			// Merge: prefer right sibling
+			if (parpos != parent_size)
+			{
+				auto right = static_cast<nodeptr>(parent->childrens[parpos + 1]);
+				auto const current_size_before{current->size};
+				auto const right_size_before{right->size};
 
-			// Bring down parent key
-			current->keys[current->size] = parent->keys[parpos];
+				// Bring down parent key
+				current->keys[current_size_before] = parent->keys[parpos];
 
-			// Append right sibling's keys
-			::fast_io::freestanding::non_overlapped_copy(
-				right->keys, right->keys + right->size, current->keys + current->size + 1);
-			current->size += right->size + 1;
+				// Append right sibling's keys
+				::fast_io::freestanding::non_overlapped_copy(
+					right->keys, right->keys + right_size_before, current->keys + current_size_before + 1);
+				if (!current->leaf)
+				{
+					::fast_io::freestanding::non_overlapped_copy(
+						right->childrens, right->childrens + right_size_before + 1,
+						current->childrens + current_size_before + 1);
+					for (::std::size_t i{}; i <= right_size_before; ++i)
+					{
+						auto child{static_cast<nodeptr>(right->childrens[i])};
+						if (child)
+						{
+							child->parent = current;
+							child->parent_pos = current_size_before + 1 + i;
+						}
+					}
+				}
+				current->size += right_size_before + 1;
 
-			// Free right sibling
-			typed_allocator_type::deallocate_n(right, 1);
+				if (right == imp.rightmost)
+				{
+					imp.rightmost = current;
+				}
+				// Free right sibling
+				typed_allocator_type::deallocate_n(right, 1);
 
-			// Shift parent's keys and children
-			::fast_io::freestanding::overlapped_copy(
+				// Shift parent's keys and children
+				::fast_io::freestanding::overlapped_copy(
 				parent->keys + parpos + 1, parent->keys + parent_size, parent->keys + parpos);
 			::fast_io::freestanding::overlapped_copy(
-				parent->childrens + parpos + 2, parent->childrens + parent_size + 1,
-				parent->childrens + parpos + 1);
-			--parent->size;
+					parent->childrens + parpos + 2, parent->childrens + parent_size + 1,
+					parent->childrens + parpos + 1);
+				--parent->size;
+				fix_child_links(parent);
 
-			current = parent; // move up
-		}
-		else
-		{
-			// Merge with left sibling
-			auto left = static_cast<nodeptr>(parent->childrens[parpos - 1]);
+				current = parent; // move up
+			}
+			else
+			{
+				// Merge with left sibling
+				auto left = static_cast<nodeptr>(parent->childrens[parpos - 1]);
+				auto const left_size_before{left->size};
+				auto const current_size_before{current->size};
 
-			// Bring down parent key
-			left->keys[left->size] = parent->keys[parpos - 1];
+				// Bring down parent key
+				left->keys[left_size_before] = parent->keys[parpos - 1];
 
-			// Append current's keys
-			::fast_io::freestanding::non_overlapped_copy(
-				current->keys, current->keys + current->size, left->keys + left->size + 1);
-			left->size += current->size + 1;
+				// Append current's keys
+				::fast_io::freestanding::non_overlapped_copy(
+					current->keys, current->keys + current_size_before, left->keys + left_size_before + 1);
+				if (!left->leaf)
+				{
+					::fast_io::freestanding::non_overlapped_copy(
+						current->childrens, current->childrens + current_size_before + 1,
+						left->childrens + left_size_before + 1);
+					for (::std::size_t i{}; i <= current_size_before; ++i)
+					{
+						auto child{static_cast<nodeptr>(current->childrens[i])};
+						if (child)
+						{
+							child->parent = left;
+							child->parent_pos = left_size_before + 1 + i;
+						}
+					}
+				}
+				left->size += current_size_before + 1;
 
-			// Free current
-			typed_allocator_type::deallocate_n(current, 1);
+				if (current == imp.rightmost)
+				{
+					imp.rightmost = left;
+				}
+				// Free current
+				typed_allocator_type::deallocate_n(current, 1);
 
-			// Shift parent's keys and children
-			::fast_io::freestanding::overlapped_copy(
+				// Shift parent's keys and children
+				::fast_io::freestanding::overlapped_copy(
 				parent->keys + parpos, parent->keys + parent_size, parent->keys + parpos - 1);
 			::fast_io::freestanding::overlapped_copy(
-				parent->childrens + parpos + 1, parent->childrens + parent_size + 1,
-				parent->childrens + parpos);
-			--parent->size;
+					parent->childrens + parpos + 1, parent->childrens + parent_size + 1,
+					parent->childrens + parpos);
+				--parent->size;
+				fix_child_links(parent);
 
-			current = parent; // move up
+				current = parent; // move up
+			}
 		}
 	}
-}
 
-template <typename allocator_type, ::std::size_t keys_number, typename nodetype>
-inline constexpr bool str_btree_erase(::fast_io::containers::details::btree_imp &imp,
-									  typename nodetype::char_type const *keystrptr,
-									  ::std::size_t keystrn) noexcept
+	template <typename allocator_type, ::std::size_t keys_number, typename nodetype>
+	inline constexpr bool str_btree_erase(::fast_io::containers::details::btree_imp &imp,
+										  typename nodetype::char_type const *keystrptr,
+										  ::std::size_t keystrn) noexcept
 {
 	using char_type = typename nodetype::char_type;
 	using nodeptr
@@ -517,11 +612,11 @@ inline constexpr bool str_btree_erase(::fast_io::containers::details::btree_imp 
 		[[__gnu__::__may_alias__]]
 #endif
 		= ::fast_io::containers::details::str_btree_set_common<keys_number> *;
-	using typed_allocator_type =
-		::fast_io::typed_generic_allocator_adapter<allocator_type,
-												   ::fast_io::containers::details::str_btree_set_common<keys_number>>;
+		using typed_allocator_type =
+			::fast_io::typed_generic_allocator_adapter<allocator_type,
+													   ::fast_io::containers::details::str_btree_set_common<keys_number>>;
 
-	constexpr std::size_t min_keys{keys_number >> 1u};
+		constexpr std::size_t min_keys{(keys_number >> 1u) - 1u};
 
 	auto root_node{static_cast<::fast_io::containers::details::str_btree_set_node<char_type, keys_number> *>(imp.root)};
 	auto [found_ptr, found_pos]{::fast_io::containers::details::str_btree_find(root_node, keystrptr, keystrn)};
@@ -624,19 +719,35 @@ inline constexpr bool str_btree_erase(::fast_io::containers::details::btree_imp 
 			merged_target->size += target_node->size + 1;
 		}
 
-		typed_allocator_type::deallocate_n(merged_victim, 1);
+			typed_allocator_type::deallocate_n(merged_victim, 1);
+			if (merged_victim == imp.rightmost)
+			{
+				imp.rightmost = merged_target;
+			}
+			if (merged_victim == imp.leftmost)
+			{
+				imp.leftmost = merged_target;
+			}
 
+			::fast_io::freestanding::overlapped_copy(
+				target_parent->keys + parent_key_index + 1, target_parent->keys + parent_size,
+				target_parent->keys + parent_key_index);
 		::fast_io::freestanding::overlapped_copy(
-			target_parent->keys + parent_key_index + 1, target_parent->keys + parent_size,
-			target_parent->keys + parent_key_index);
-		::fast_io::freestanding::overlapped_copy(
-			target_parent->childrens + parent_key_index + 2, target_parent->childrens + parent_size + 1,
-			target_parent->childrens + parent_key_index + 1);
-		--target_parent->size;
+				target_parent->childrens + parent_key_index + 2, target_parent->childrens + parent_size + 1,
+				target_parent->childrens + parent_key_index + 1);
+			--target_parent->size;
+			for (std::size_t i{parent_key_index + 1}; i <= target_parent->size; ++i)
+			{
+				auto ch{static_cast<nodeptr>(target_parent->childrens[i])};
+				if (ch)
+				{
+					ch->parent_pos = i;
+				}
+			}
 
-		str_btree_erase_underflow<allocator_type, keys_number>(imp, target_parent);
-		return true;
-	}
+			str_btree_erase_underflow<allocator_type, keys_number>(imp, target_parent);
+			return true;
+		}
 
 	// Case 2: deletion from an internal node
 	nodeptr internal_node{target_node};
@@ -701,51 +812,58 @@ inline constexpr bool str_btree_erase(::fast_io::containers::details::btree_imp 
 		return true;
 	}
 
-	::fast_io::details::deallocate_associative_string<allocator_type, char_type>(
-		internal_node->keys[internal_key_index].base,
-		internal_node->keys[internal_key_index].len);
-	// Merge left child + internal key + right child into left child
-	left_child->keys[left_child->size] = internal_node->keys[internal_key_index];
-	::fast_io::freestanding::non_overlapped_copy(
-		right_child->keys, right_child->keys + right_child->size,
-		left_child->keys + left_child->size + 1);
-	left_child->size += right_child->size + 1;
-
-	if (!left_child->leaf)
-	{
-		auto lc{left_child->childrens};
-		auto rc{right_child->childrens};
+		// Merge left child + internal key + right child into left child, then delete the key in the merged subtree.
+		std::size_t left_size_before{left_child->size};
+		std::size_t right_size_before{right_child->size};
+		left_child->keys[left_size_before] = internal_node->keys[internal_key_index];
 		::fast_io::freestanding::non_overlapped_copy(
-			rc, rc + (right_child->size + 1),
-			lc + (left_child->size - (right_child->size + 1)));
-		for (std::size_t i{0}; i < right_child->size + 1; ++i)
+			right_child->keys, right_child->keys + right_size_before,
+			left_child->keys + left_size_before + 1);
+		if (!left_child->leaf)
 		{
-			auto ch{static_cast<nodeptr>(rc[i])};
-			if (ch)
+			::fast_io::freestanding::non_overlapped_copy(
+				right_child->childrens, right_child->childrens + right_size_before + 1,
+				left_child->childrens + left_size_before + 1);
+			for (std::size_t i{}; i <= right_size_before; ++i)
 			{
-				ch->parent = left_child;
-				ch->parent_pos = (left_child->size - (right_child->size + 1)) + i;
+				auto ch{static_cast<nodeptr>(right_child->childrens[i])};
+				if (ch)
+				{
+					ch->parent = left_child;
+					ch->parent_pos = left_size_before + 1 + i;
+				}
 			}
 		}
-	}
+		left_child->size = left_size_before + right_size_before + 1;
+		if (right_child == imp.rightmost)
+		{
+			imp.rightmost = left_child;
+		}
+		typed_allocator_type::deallocate_n(right_child, 1);
 
-	typed_allocator_type::deallocate_n(right_child, 1);
-
-	std::size_t internal_size_before{internal_node->size};
-	::fast_io::freestanding::overlapped_copy(
+		std::size_t internal_size_before{internal_node->size};
+		::fast_io::freestanding::overlapped_copy(
 		internal_node->keys + internal_key_index + 1,
 		internal_node->keys + internal_size_before,
 		internal_node->keys + internal_key_index);
 	::fast_io::freestanding::overlapped_copy(
-		internal_node->childrens + internal_key_index + 2,
-		internal_node->childrens + internal_size_before + 1,
-		internal_node->childrens + internal_key_index + 1);
-	--internal_node->size;
+			internal_node->childrens + internal_key_index + 2,
+			internal_node->childrens + internal_size_before + 1,
+			internal_node->childrens + internal_key_index + 1);
+		--internal_node->size;
+		for (std::size_t i{internal_key_index + 1}; i <= internal_node->size; ++i)
+		{
+			auto ch{static_cast<nodeptr>(internal_node->childrens[i])};
+			if (ch)
+			{
+				ch->parent_pos = i;
+			}
+		}
 
-	// Repair potential underflow upward from the internal node
-	str_btree_erase_underflow<allocator_type, keys_number>(imp, internal_node);
-	return true;
-}
+		// Repair potential underflow upward from the internal node
+		str_btree_erase_underflow<allocator_type, keys_number>(imp, internal_node);
+		return str_btree_erase<allocator_type, keys_number, nodetype>(imp, keystrptr, keystrn);
+	}
 
 /* Common structure used for str_btree_set iterator.
 Holds the current node pointer, position within node, and optional 'last' for reversed iteration fallback. */
