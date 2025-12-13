@@ -457,8 +457,8 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				::fast_io::freestanding::overlapped_copy(
 					right->keys + 1, right->keys + right->size, right->keys);
 				--right->size;
-				fix_child_links<keys_number>(current);
-				fix_child_links<keys_number>(right);
+				::fast_io::containers::details::fix_child_links<keys_number>(current);
+				::fast_io::containers::details::fix_child_links<keys_number>(right);
 				return; // fixed
 			}
 		}
@@ -495,8 +495,8 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				// Update parent key to left sibling's rightmost
 				parent->keys[parpos - 1] = left->keys[left_size_before - 1];
 				--left->size;
-				fix_child_links<keys_number>(current);
-				fix_child_links<keys_number>(left);
+				::fast_io::containers::details::fix_child_links<keys_number>(current);
+				::fast_io::containers::details::fix_child_links<keys_number>(left);
 				return; // fixed
 			}
 		}
@@ -545,7 +545,7 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				parent->childrens + parpos + 2, parent->childrens + parent_size + 1,
 				parent->childrens + parpos + 1);
 			--parent->size;
-			fix_child_links<keys_number>(parent);
+			::fast_io::containers::details::fix_child_links<keys_number>(parent);
 
 			current = parent; // move up
 		}
@@ -593,7 +593,7 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				parent->childrens + parpos + 1, parent->childrens + parent_size + 1,
 				parent->childrens + parpos);
 			--parent->size;
-			fix_child_links<keys_number>(parent);
+			::fast_io::containers::details::fix_child_links<keys_number>(parent);
 
 			current = parent; // move up
 		}
