@@ -364,6 +364,22 @@ inline constexpr bool str_btree_insert_key_with_root(::fast_io::containers::deta
 	return ::fast_io::containers::details::str_btree_insert_key_cold<allocator_type, keys_number>(node, pos, tempkey.ptr, tempkey.n, imp);
 }
 
+template<::std::size_t keys_number>
+inline constexpr void fix_child_links(::fast_io::containers::details::str_btree_set_common<keys_number> *parent_node) noexcept
+{
+	using nodeptr = decltype(parent_node);
+	if (parent_node == nullptr || parent_node->leaf)
+	{
+		return;
+	}
+	for (::std::size_t i{}; i <= parent_node->size; ++i)
+	{
+		auto child{static_cast<nodeptr>(parent_node->childrens[i])};
+		child->parent = parent_node;
+		child->parent_pos = i;
+	}
+}
+
 template <typename allocator_type, ::std::size_t keys_number>
 inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::btree_imp &imp,
 												::fast_io::containers::details::str_btree_set_common<keys_number> *node) noexcept
@@ -378,22 +394,6 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 												   ::fast_io::containers::details::str_btree_set_common<keys_number>>;
 
 	constexpr ::std::size_t min_keys{(keys_number >> 1u) - 1u};
-
-	auto fix_child_links = [](nodeptr parent_node) noexcept {
-		if (parent_node == nullptr || parent_node->leaf)
-		{
-			return;
-		}
-		for (::std::size_t i{}; i <= parent_node->size; ++i)
-		{
-			auto child{static_cast<nodeptr>(parent_node->childrens[i])};
-			if (child)
-			{
-				child->parent = parent_node;
-				child->parent_pos = i;
-			}
-		}
-	};
 
 	auto current = node;
 	while (current && current->size < min_keys)
@@ -457,8 +457,8 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				::fast_io::freestanding::overlapped_copy(
 					right->keys + 1, right->keys + right->size, right->keys);
 				--right->size;
-				fix_child_links(current);
-				fix_child_links(right);
+				fix_child_links<keys_number>(current);
+				fix_child_links<keys_number>(right);
 				return; // fixed
 			}
 		}
@@ -495,8 +495,8 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				// Update parent key to left sibling's rightmost
 				parent->keys[parpos - 1] = left->keys[left_size_before - 1];
 				--left->size;
-				fix_child_links(current);
-				fix_child_links(left);
+				fix_child_links<keys_number>(current);
+				fix_child_links<keys_number>(left);
 				return; // fixed
 			}
 		}
@@ -545,7 +545,7 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				parent->childrens + parpos + 2, parent->childrens + parent_size + 1,
 				parent->childrens + parpos + 1);
 			--parent->size;
-			fix_child_links(parent);
+			fix_child_links<keys_number>(parent);
 
 			current = parent; // move up
 		}
@@ -593,7 +593,7 @@ inline constexpr void str_btree_erase_underflow(::fast_io::containers::details::
 				parent->childrens + parpos + 1, parent->childrens + parent_size + 1,
 				parent->childrens + parpos);
 			--parent->size;
-			fix_child_links(parent);
+			fix_child_links<keys_number>(parent);
 
 			current = parent; // move up
 		}
