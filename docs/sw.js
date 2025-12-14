@@ -1,7 +1,6 @@
 const CACHE_NAME = "fast_io-docs-v1";
 const urlsToCache = [
   "/",
-  "/index.html",
   "/style.css",
   "/script.js",
   "/sw-register.js",
@@ -12,6 +11,8 @@ const urlsToCache = [
   "/docs/01.helloworld.html",
   "/docs/02.aplusb.html",
   "/docs/03.pointer.html",
+  "/docs/04.fileio.html",
+  "/docs/05.filetypelayers.html",
 ];
 
 self.addEventListener("install", event => {
