@@ -4,9 +4,14 @@ const urlsToCache = [
   "/index.html",
   "/style.css",
   "/script.js",
+  "/sw-register.js",
+  "/manifest.json",
+  "/icons/logo.webp",
   "/docs/intro.html",
   "/docs/api.html",
-  "/docs/examples.html"
+  "/docs/01.helloworld.html",
+  "/docs/02.aplusb.html",
+  "/docs/03.pointer.html",
 ];
 
 self.addEventListener("install", event => {
