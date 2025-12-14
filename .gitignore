@@ -16,3 +16,7 @@ CMakeLists.txt
 compile_commands.json
 .DS_Store
 *.lnk
+
+# --- Exceptions ---
+# Allow documentation HTMLs
+!docs/**/*.html
