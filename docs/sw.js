@@ -1,4 +1,4 @@
-const CACHE_NAME = "fast_io-docs-v2";
+const CACHE_NAME = "fast_io-docs-v3";
 const urlsToCache = [
   "/",
   "/style.css",

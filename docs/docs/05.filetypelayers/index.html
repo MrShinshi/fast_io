@@ -34,6 +34,37 @@
       </ol>
     </section>
 
+  <section>
+    <h2>Explainations for the Hierarchy of File Types</h2>
+    <p>From bottom to top:</p>
+    <ol>
+      <li>
+        <code>wine</code> —
+        <code>::fast_io::wine_file</code> is the lowest layer used when running Windows binaries on POSIX systems (e.g. Linux, FreeBSD) via Wine. It directly interacts with Wine’s emulated NT kernel APIs.
+      </li>
+      <li>
+        <code>nt</code> —
+        <code>::fast_io::nt_file</code> accesses the Windows NT kernel directly via <code>NtWriteFile</code> and related syscalls. This is the most native and lowest-level file interface on modern Windows systems (NT, 2000, XP, 7, 10, etc).
+      </li>
+      <li>
+        <code>win32</code> —
+        <code>::fast_io::win32_file</code> wraps the Win32 API’s <code>WriteFile</code> function via <code>kernel32.dll</code>. It is higher-level than NT and used for compatibility with user-mode Windows applications.
+      </li>
+      <li>
+        <code>posix</code> —
+        <code>::fast_io::posix_file</code> wraps POSIX-style file descriptors and maps to <code>write(2)</code> on Unix-like systems. On Windows, it is emulated via MSVCRT or UCRT.
+      </li>
+      <li>
+        <code>c</code> —
+        <code>::fast_io::c_file</code> exposes the C standard library’s <code>FILE*</code> interface (e.g. <code>fwrite(3)</code>). It provides buffering and is widely used in legacy C code.
+      </li>
+      <li>
+        <code>filebuf</code> —
+        <code>::fast_io::filebuf_file</code> exposes the C++ standard library’s <code>std::filebuf*</code> interface, used by <code>std::fstream</code>. It is the highest-level abstraction and integrates with C++ I/O streams.
+      </li>
+    </ol>
+  </section>
+
     <section>
       <h2>Unbuffered Layers</h2>
       <p>
