@@ -47,7 +47,7 @@ int main()
 {
     using namespace fast_io::mnp;
     int x{42};
-    int* ptr = &x;
+    int *ptr{::std::addressof(x)};
     println("Address:", pointervw(ptr));
 }
       </code></pre>
@@ -62,13 +62,9 @@ int main()
       <pre><code class="language-cpp">
 #include &lt;fast_io.h&gt;
 
-using namespace fast_io::io;
-#include <fast_io.h>
-
-using namespace fast_io::io;
-
 int main()
 {
+    using namespace fast_io::io;
     using namespace fast_io::mnp;
     constexpr char const* ptr{"Hello\0World\n"};
 
@@ -108,8 +104,11 @@ int main()
     void (C::*downcptr)() noexcept = &B::g;
 
     println(
-        "funcvw(foo):", funcvw(foo), "\n",
-        "methodvw(&dummy_class::dummy_method):", methodvw(&dummy_class::dummy_method), "\n",
+        "funcvw(foo):", funcvw(foo), "\n"
+
+        "methodvw(&dummy_class::dummy_method):",
+        methodvw(&dummy_class::dummy_method), "\n"
+
         "methodvw(downcptr):", methodvw(downcptr)
     );
 }
@@ -134,7 +133,7 @@ int main()
 {
     using namespace fast_io::mnp;
     int fd{3};       // POSIX file descriptor
-    FILE* f = stdout;
+    FILE *f{stdout};
 
     println(
         "POSIX fd:", handlevw(fd), "\n",
