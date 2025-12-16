@@ -604,6 +604,40 @@ int main() {
     - Avoid <code>wchar_t</code>/<code>wstring</code> unless you are targeting a specific platform API that requires it.
   </p>
 </section>
+<section>
+  <h2>8. Memory Safety Tools</h2>
+  <p>
+    Modern compilers and runtimes provide powerful tools to detect and prevent memory safety bugs.
+    These can be combined with <code>fast_io</code> to ensure robust and secure code.
+  </p>
+  <ul>
+    <li>
+      <strong>AddressSanitizer (ASan)</strong>: enable with <code>-fsanitize=address</code> to catch buffer overflows,
+      use‑after‑free, and other memory errors at runtime.
+    </li>
+    <li>
+      <strong>UndefinedBehaviorSanitizer (UBSan)</strong>: enable with <code>-fsanitize=undefined</code> to detect
+      undefined behaviors such as invalid shifts, integer overflows, or misaligned accesses.
+    </li>
+    <li>
+      <strong>Fuzzing</strong>: combine sanitizers with Clang’s <code>-fsanitize=fuzzer</code> to automatically generate
+      random inputs and stress‑test your code paths for hidden bugs.
+    </li>
+    <li>
+      <strong>Memory Tagging</strong>: use <code>-fsanitize=memtag</code> on supported platforms (ARM MTE, WebAssembly
+      memory tagging, and others) to enforce tagged memory safety. This detects spatial and temporal errors by associating
+      tags with memory allocations. The WebAssembly memory tagging approach was developed by the same author as this
+      <code>fast_io</code> library, underscoring its focus on practical memory safety. See
+      <a href="https://dl.acm.org/doi/full/10.1145/3733812.3765536" target="_blank">ACM reference</a>
+      for details on cross‑platform memory tagging.
+    </li>
+  </ul>
+  <p>
+    In practice: run your builds with sanitizers during development, integrate fuzzing into CI pipelines, and adopt
+    memory tagging where available. These tools complement <code>fast_io</code>’s fail‑fast philosophy by catching
+    subtle bugs before they reach production.
+  </p>
+</section>
 
 <section>
   <h2>8. Summary</h2>
@@ -616,6 +650,8 @@ int main() {
     <li>Read input with no manipulator (token), <code>line_get</code> (line), or <code>whole_get</code> (entire stream).</li>
     <li>Prefer range‑based loops; use indices for positions, iterators only for advanced cases.</li>
     <li>Favor <code>u8string</code> (UTF‑8) for portability; avoid <code>wchar_t</code>/<code>wstring</code> unless platform‑specific.</li>
+    <li>Use tooling such as Clang sanitizers (<code>-fsanitize=address,undefined</code>), fuzzing (<code>-fsanitize=fuzzer</code>),
+        and memory tagging (<code>-fsanitize=memtag</code> on ARM MTE, WebAssembly, and other platforms) to detect and prevent memory safety bugs.</li>
   </ul>
   <p>
     In short: rely on safe defaults, use iterators carefully, and lean on UTF‑8 for cross‑platform text.
