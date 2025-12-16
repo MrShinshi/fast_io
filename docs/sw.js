@@ -1,4 +1,4 @@
-const CACHE_NAME = "fast_io-docs-v4.1";
+const CACHE_NAME = "fast_io-docs-v6"; // bump version here
 const urlsToCache = [
   "/",
   "/style.css",
@@ -7,7 +7,7 @@ const urlsToCache = [
   "/manifest.json",
   "/icons/logo.webp",
   "/docs/intro/",
-//  "/docs/api/",
+  // "/docs/api/",
   "/docs/01.io/",
   "/docs/01.io/01.helloworld/",
   "/docs/01.io/02.aplusb/",
@@ -18,14 +18,32 @@ const urlsToCache = [
   "/docs/02.dsal/01.string/",
 ];
 
+// Install: pre-cache resources
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
   );
+  self.skipWaiting(); // activate new worker immediately
 });
 
+// Activate: remove old caches
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.filter(key => key !== CACHE_NAME)
+            .map(key => caches.delete(key))
+      )
+    )
+  );
+  self.clients.claim(); // take control of all pages
+});
+
+// Fetch: cache-first with network fallback
 self.addEventListener("fetch", event => {
   event.respondWith(
-    caches.match(event.request).then(response => response || fetch(event.request))
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request);
+    })
   );
 });
