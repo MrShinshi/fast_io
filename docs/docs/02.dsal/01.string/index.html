@@ -608,23 +608,17 @@ int main() {
 <section>
   <h2>8. Summary</h2>
   <p>
-    The <code>::fast_io::string</code> type is the core text container in fast_io. It integrates tightly with the library’s
-    I/O model and provides both safe and efficient operations for text manipulation.
+    <code>::fast_io::string</code> is the core text container in fast_io, designed for safe and efficient text handling.
   </p>
   <ul>
-    <li><code>concat_fast_io</code> and <code>concatln_fast_io</code> reuse the printing infrastructure for safe concatenation, avoiding temporary allocations.</li>
-    <li>Basic text manipulation can be done safely with <code>push_back</code>, <code>append</code>, and container indexing, all of which enforce bounds checking.</li>
-    <li>Input can be read directly into strings using <code>line_get</code> (line‑based) or <code>whole_get</code> (entire stream).</li>
-    <li>For iteration, prefer <strong>range‑based for loops</strong> as the simplest and safest approach. Use container indexing if you need positions, and only rely on iterators for advanced algorithms where pointer‑like behavior is required.</li>
-    <li>For Unicode text, prefer <strong>u8string</strong> (UTF‑8) for portability. fast_io automatically transcodes filenames to the operating system’s native encoding. Use <code>code_cvt</code> when printing across different character types.</li>
-    <li>Avoid <code>wchar_t</code>/<code>wstring</code> unless you are targeting a specific platform that requires them.</li>
+    <li>Use <code>concat_fast_io</code> / <code>concatln_fast_io</code> for efficient concatenation.</li>
+    <li>Manipulate text safely with <code>push_back</code>, <code>append</code>, and indexing.</li>
+    <li>Read input with no manipulator (token), <code>line_get</code> (line), or <code>whole_get</code> (entire stream).</li>
+    <li>Prefer range‑based loops; use indices for positions, iterators only for advanced cases.</li>
+    <li>Favor <code>u8string</code> (UTF‑8) for portability; avoid <code>wchar_t</code>/<code>wstring</code> unless platform‑specific.</li>
   </ul>
   <p>
-    In practice, this means: use indices when you want safety and fail‑fast behavior, use iterators only when algorithms demand them, and always be mindful of undefined behavior risks like buffer overflows or use‑after‑free. 
-    fast_io’s design emphasizes portability (UTF‑8 by default), efficiency (reuse of printing for concatenation), and safety (bounds checking in index‑based APIs).
-  </p>
-  <p>
-    Overall, the guiding principles are: <strong>prefer safe defaults, understand when unchecked operations are necessary, and lean on UTF‑8 for cross‑platform text handling</strong>.
+    In short: rely on safe defaults, use iterators carefully, and lean on UTF‑8 for cross‑platform text.
   </p>
 </section>
 
