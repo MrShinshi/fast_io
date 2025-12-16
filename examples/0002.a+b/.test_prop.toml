@@ -6,3 +6,6 @@ interactive = true
 
 ["hex_a+b.cc"]
 interactive = true
+
+["base36_a+b_iomnp.cc"]
+interactive = true
