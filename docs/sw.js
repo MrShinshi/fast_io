@@ -1,12 +1,18 @@
-const CACHE_NAME = "fast_io-docs-v1";
+const CACHE_NAME = "fast_io-docs-v3";
 const urlsToCache = [
   "/",
-  "/index.html",
   "/style.css",
   "/script.js",
-  "/docs/intro.html",
-  "/docs/api.html",
-  "/docs/examples.html"
+  "/sw-register.js",
+  "/manifest.json",
+  "/icons/logo.webp",
+  "/docs/intro/",
+//  "/docs/api/",
+  "/docs/01.helloworld/",
+  "/docs/02.aplusb/",
+  "/docs/03.pointer/",
+  "/docs/04.fileio/",
+  "/docs/05.filetypelayers/",
 ];
 
 self.addEventListener("install", event => {
