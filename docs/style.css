@@ -79,3 +79,21 @@ nav a {
   width: 100%;          /* scale to container width */
   height: 100%;         /* scale height accordingly */
 }
+
+li {
+  margin: 0.3rem 0;
+  list-style: none;   /* removes default bullets */
+}
+
+li::before {
+  content: none;      /* no folder icon */
+}
+
+li a::before {
+  content: none;      /* no file icon */
+}
+
+li a {
+  text-decoration: none;
+  color: #0066cc;
+}
