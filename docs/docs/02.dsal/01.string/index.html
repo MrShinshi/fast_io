@@ -54,7 +54,7 @@ int main() {
         <code>using namespace fast_io::iomnp;</code> inside <code>main()</code> so it only applies locally.
       </p>
 
-      <pre><code class="language-cpp">
+<pre><code class="language-cpp">
 #include &lt;fast_io.h&gt;
 #include &lt;fast_io_dsal/string.h&gt;
 
@@ -62,6 +62,10 @@ int main() {
     using namespace ::fast_io::iomnp;
 
     ::fast_io::string str;
+
+    // read next space-delimited token
+    scan(str);
+    println("Token: ", str);
 
     // read one line (without newline)
     scan(line_get(str));
@@ -71,7 +75,7 @@ int main() {
     scan(whole_get(str));
     println("Whole input size: ", str.size());
 }
-      </code></pre>
+</code></pre>
 
       <p>
         These work with files too:
@@ -91,11 +95,30 @@ int main() {
 }
       </code></pre>
 
-      <h3>Detecting End of File (EOF)</h3>
-      <p>
-        Use <code>scan&lt;true&gt;</code> to detect End of File (EOF). It returns <code>true</code> while input is available.
-      </p>
-      <pre><code class="language-cpp">
+<h3>Detecting End of File (EOF)</h3>
+<p>
+  Use <code>scan&lt;true&gt;</code> to detect End of File (EOF). It returns <code>true</code> while input is available.
+</p>
+
+<h4>Example 1: Reading tokens until EOF</h4>
+<pre><code class="language-cpp">
+#include &lt;fast_io.h&gt;
+#include &lt;fast_io_dsal/string.h&gt;
+
+int main() {
+    using namespace fast_io::iomnp;
+
+    ::fast_io::string str;
+
+    // keep reading space-delimited tokens until end of the file
+    for (; scan&lt;true&gt;(str); ) {
+        println("Token: ", str);
+    }
+}
+</code></pre>
+
+<h4>Example 2: Reading lines until EOF</h4>
+<pre><code class="language-cpp">
 #include &lt;fast_io.h&gt;
 #include &lt;fast_io_dsal/string.h&gt;
 
@@ -109,7 +132,8 @@ int main() {
         println("Line: ", str);
     }
 }
-      </code></pre>
+</code></pre>
+
     </section>
 
     <section>
