@@ -629,8 +629,15 @@ template <bool uppercase = false, typename scalar_type>
 	requires(::std::is_member_object_pointer_v<scalar_type>)
 inline constexpr auto fieldptrvw(scalar_type t) noexcept
 {
+	using fieldptruinttype =
+#ifdef _MSC_VER
+		::std::uint_least32_t
+#else
+		::std::size_t
+#endif
+		;
 	return ::fast_io::details::scalar_flags_int_cache<
-		::fast_io::details::base_mani_flags_cache<16, uppercase, true, true, false>>(::std::bit_cast<::std::size_t>(t));
+		::fast_io::details::base_mani_flags_cache<16, uppercase, true, true, false>>(::std::bit_cast<fieldptruinttype>(t));
 }
 
 template <bool uppercase = false, typename scalar_type>
