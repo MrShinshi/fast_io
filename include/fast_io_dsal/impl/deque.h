@@ -469,7 +469,9 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 
 	back_block.begin_ptr = front_block.begin_ptr = begin_ptr;
 	back_block.end_ptr = front_block.end_ptr = (begin_ptr + bytes);
-	back_block.curr_ptr = front_block.curr_ptr = (begin_ptr + halfsize);
+	auto halfposptr{begin_ptr + halfsize};
+	front_block.curr_ptr = halfposptr;
+	back_block.curr_ptr = halfposptr;
 }
 
 template <typename allocator, typename dequecontroltype>
@@ -638,11 +640,8 @@ public:
 			grow_back();
 		}
 		auto currptr{controller.back_block.curr_ptr};
-		if constexpr (!::std::is_trivially_constructible_v<value_type>)
-		{
-			::std::construct_at(currptr, ::std::forward<Args>(args)...);
-		}
-		++controller.back_block.curr_ptr;
+		::std::construct_at(currptr, ::std::forward<Args>(args)...);
+		controller.back_block.curr_ptr = currptr + 1;
 		return *currptr;
 	}
 
@@ -716,10 +715,7 @@ public:
 		{
 			grow_front();
 		}
-		if constexpr (!::std::is_trivially_constructible_v<value_type>)
-		{
-			::std::construct_at(--controller.front_block.curr_ptr, ::std::forward<Args>(args)...);
-		}
+		::std::construct_at(--controller.front_block.curr_ptr, ::std::forward<Args>(args)...);
 		return *controller.front_block.curr_ptr;
 	}
 
