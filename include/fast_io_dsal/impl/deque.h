@@ -272,70 +272,30 @@ inline constexpr auto operator<=>(::fast_io::containers::details::deque_iterator
 	return block3way;
 }
 
-template <typename allocator, typename controllerblocktype>
-inline constexpr void deque_destroy_controller(controllerblocktype *controllerptr) noexcept
-{
-	auto &controller{*controllerptr};
-	if constexpr (allocator::has_deallocate)
-	{
-		allocator::deallocate(controller.controller_start_ptr);
-	}
-	else
-	{
-		::std::size_t n{static_cast<::std::size_t>(controller.controller_after_ptr - controller.controller_start_ptr) * sizeof(void *)};
-		allocator::deallocate_n(controller.controller_start_ptr, n);
-	}
-
-	controller.controller_start_ptr = nullptr;
-}
 
 template <typename allocator, typename controllerblocktype>
-inline constexpr void deque_destroy_trivial_common_align(controllerblocktype *controllerptr, ::std::size_t aligns, ::std::size_t totalsz) noexcept
+inline constexpr void deque_destroy_trivial_common_align(controllerblocktype &controller, ::std::size_t aligns, ::std::size_t totalsz) noexcept
 {
-	auto &controller_block{*controllerptr};
-	for (auto i{controller_block.controller_start_reserved_ptr}, e{controller_block.controller_after_reserved_ptr}; i != e; ++i)
+	for (auto i{controller.controller_start_reserved_ptr}, e{controller.controller_after_reserved_ptr}; i != e; ++i)
 	{
 		allocator::deallocate_aligned_n(*i, aligns, totalsz);
 	}
-	deque_destroy_controller<allocator>(controllerptr);
-}
-
-template <typename allocator, typename controllerblocktype>
-inline constexpr void deque_destroy_trivial_common_no_align(controllerblocktype *controllerptr, ::std::size_t totalsz) noexcept
-{
-	auto &controller_block{*controllerptr};
-	for (auto i{controller_block.controller_start_reserved_ptr}, e{controller_block.controller_after_reserved_ptr}; i != e; ++i)
-	{
-		allocator::deallocate_n(*i, totalsz);
-	}
-	deque_destroy_controller<allocator>(controllerptr);
-}
-
-template <typename allocator, ::std::size_t align, ::std::size_t sz, typename controllerblocktype>
-inline constexpr void deque_destroy_trivial_common_impl(controllerblocktype *controllerptr) noexcept
-{
-	constexpr ::std::size_t totalsz{sz * ::fast_io::containers::details::deque_block_size<sz>};
-	if constexpr (align <= allocator::default_alignment)
-	{
-		::fast_io::containers::details::deque_destroy_trivial_common_no_align<allocator, controllerblocktype>(controllerptr, totalsz);
-	}
-	else
-	{
-		::fast_io::containers::details::deque_destroy_trivial_common_align<allocator, controllerblocktype>(controllerptr, align, totalsz);
-	}
+	::std::size_t const n{static_cast<::std::size_t>(controller.controller_after_ptr - controller.controller_start_ptr + 1) * sizeof(void *)};
+	allocator::deallocate_n(controller.controller_start_ptr, n);
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, typename controllerblocktype>
 inline constexpr void deque_destroy_trivial_common(controllerblocktype &controller) noexcept
 {
-	if (__builtin_is_constant_evaluated())
+	constexpr ::std::size_t totalsz{sz * ::fast_io::containers::details::deque_block_size<sz>};
+	if consteval
 	{
-		::fast_io::containers::details::deque_destroy_trivial_common_impl<allocator, align, sz, controllerblocktype>(__builtin_addressof(controller));
+		::fast_io::containers::details::deque_destroy_trivial_common_align<allocator>(controller, align, totalsz);
 	}
 	else
 	{
-		::fast_io::containers::details::deque_destroy_trivial_common_impl<allocator, align, sz, ::fast_io::containers::details::deque_controller_block_common>(
-			reinterpret_cast<::fast_io::containers::details::deque_controller_block_common *>(__builtin_addressof(controller)));
+		::fast_io::containers::details::deque_destroy_trivial_common_align<allocator>(
+			*reinterpret_cast<::fast_io::containers::details::deque_controller_block_common *>(__builtin_addressof(controller)), align, totalsz);
 	}
 }
 
@@ -451,7 +411,9 @@ template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes) noexcept
 {
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
-	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(1);
+	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(2);
+	// we need a null terminator as sentinel like c style string does
+	--allocated_blocks_count;
 	auto &controller_block{controller.controller_block};
 	auto &front_block{controller.front_block};
 	auto &back_block{controller.back_block};
@@ -463,7 +425,8 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 
 	back_block.controller_ptr = front_block.controller_ptr = controller_block.controller_start_reserved_ptr = controller_block.controller_start_ptr = ::std::construct_at(allocated_blocks_ptr, begin_ptr);
 
-	controller_block.controller_after_reserved_ptr = allocated_blocks_ptr + 1;
+	*(controller_block.controller_after_reserved_ptr = allocated_blocks_ptr + 1) = nullptr;
+
 	controller_block.controller_after_ptr = allocated_blocks_ptr + allocated_blocks_count;
 	::std::size_t halfsize{bytes >> 1u};
 
@@ -490,9 +453,12 @@ inline constexpr void deque_grow_back_common_impl(dequecontroltype &controller, 
 			::fast_io::containers::details::deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
 		}
 	}
-	/*
-		controller.back_block.end_ptr = ((controller.back_block.curr_ptr = (controller.back_block.begin_ptr = (*++controller.back_block.controller_ptr))) + bytes);
-	*/
+
+	constexpr bool isvoidplaceholder{::std::same_as<typename dequecontroltype::replacetype, void>};
+	using begin_ptrtype = ::std::conditional_t<isvoidplaceholder, ::std::byte *, typename dequecontroltype::replacetype *>;
+	auto begin_ptr{static_cast<begin_ptrtype>(controller.back_block.curr_ptr = (controller.back_block.begin_ptr = (*++controller.back_block.controller_ptr)))};
+
+	controller.back_block.end_ptr = (begin_ptr + bytes);
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
