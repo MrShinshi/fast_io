@@ -411,7 +411,9 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	::std::size_t const old_front_controller_ptr_pos{controller.front_controller.controller_ptr - old_start_ptr};
 	::std::size_t const old_back_controller_ptr_pos{controller.back_controller.controller_ptr - old_start_ptr};
 
-	using block_typed_allocator = ::fast_io::typed_allocator<allocator, decltype(dequecontroltype)::controlreplacetype>;
+	::std::size_t const offset_to_start_reserved{old_start_ptr - controller.controller_block.controller_after_ptr};
+
+	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
 	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least);
 	/*
 	Unfinished

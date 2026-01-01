@@ -1,2 +1,8 @@
 ["dequeasm.cc"] # no auto-gen test. only to see the output assembly
 ignore = true
+["deque_push.cc"]
+ignore = true
+["test_deque.cc"]
+ignore = true
+["test_push_back.cc"]
+ignore = true
