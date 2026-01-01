@@ -368,39 +368,44 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	::std::size_t const old_start_reserved_ptr_pos{static_cast<::std::size_t>(old_start_reserved_ptr - old_start_ptr)};
 	::std::size_t const old_after_reserved_ptr_pos{static_cast<::std::size_t>(old_after_reserved_ptr - old_start_ptr)};
 	::std::size_t const old_after_ptr_pos{static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - old_start_ptr)};
-	::std::size_t const old_front_controller_ptr_pos{controller.front_controller.controller_ptr - old_start_ptr};
-	::std::size_t const old_back_controller_ptr_pos{controller.back_controller.controller_ptr - old_start_ptr};
-
-	::std::size_t const offset_to_start_reserved{old_start_ptr - controller.controller_block.controller_after_ptr};
+	::std::size_t const old_front_block_ptr_pos{static_cast<::std::size_t>(controller.front_block.controller_ptr - old_start_ptr)};
+	::std::size_t const old_back_block_ptr_pos{static_cast<::std::size_t>(controller.back_block.controller_ptr - old_start_ptr)};
+	::std::size_t const offset_to_start_reserved{static_cast<::std::size_t>(old_start_ptr - controller.controller_block.controller_after_ptr)};
 
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
-	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least);
+	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least + 1zu);
 	/*
 	Unfinished
 	*/
 	::std::size_t const new_blocks_offset{(new_blocks_count >> 2u)};
 	auto new_start_reserved_ptr{new_start_ptr + (old_start_reserved_ptr_pos + new_blocks_offset)};
 	auto new_after_reserved_ptr{::std::uninitialized_copy(old_start_reserved_ptr, old_after_reserved_ptr, new_start_reserved_ptr)};
-	block_typed_allocator::deallocate_n(old_start_ptr, old_after_ptr_pos);
+	block_typed_allocator::deallocate_n(old_start_ptr, old_after_ptr_pos + 1zu);
 	controller.controller_block.controller_start_ptr = new_start_ptr;
 	controller.controller_block.controller_start_reserved_ptr = new_start_reserved_ptr;
-	controller.controller_block.controller_after_reserved_ptr = new_after_reserved_ptr;
+	*(controller.controller_block.controller_after_reserved_ptr = new_after_reserved_ptr) = nullptr;
 	controller.controller_block.controller_after_ptr = new_start_ptr + new_blocks_count;
-	controller.front_controller.controller_ptr = new_start_ptr + (old_front_controller_ptr_pos + new_blocks_offset);
-	controller.back_controller.controller_ptr = new_start_ptr + (old_back_controller_ptr_pos + new_blocks_offset);
+	controller.front_block.controller_ptr = new_start_ptr + (old_front_block_ptr_pos + new_blocks_offset);
+	controller.back_block.controller_ptr = new_start_ptr + (old_back_block_ptr_pos + new_blocks_offset);
 }
 
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontroltype &controller) noexcept
 {
 	::std::size_t const used_blocks_count{static_cast<::std::size_t>(controller.back_block.controller_ptr - controller.front_block.controller_ptr) + 1zu};
-	::std::size_t const total_blocks{static_cast<::std::size_t>(controller.back_block.controller_ptr - controller.front_block.controller_ptr) + 1zu};
-	::std::size_t const total_blocks_half{static_cast<::std::size_t>(total_blocks >> 1u)};
-	if (used_blocks_count < total_blocks_half)
+	::std::size_t const total_blocks{static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.controller_block.controller_start_ptr)};
+	::std::size_t const total_blocks_half{total_blocks >> 1u};
+	if (total_blocks_half < used_blocks_count)
 	{
-#if 0
-		::std::size_t const reserved_blocks_count{static_cast<::std::size_t>(controller.back_block.controller_ptr - controller.controller_block.controller_ptr) + 1zu};
-#endif
+		constexpr ::std::size_t maxcount{static_cast<::std::size_t>(::std::numeric_limits<::std::size_t>::max() / sizeof(void *))};
+		constexpr ::std::size_t mxtoalign{static_cast<::std::size_t>(maxcount - 1u)};
+		constexpr ::std::size_t mxtoaligndiv2{mxtoalign >> 1u};
+		if (mxtoaligndiv2 < total_blocks)
+		{
+			::fast_io::fast_terminate();
+		}
+		::std::size_t const toallocate{total_blocks << 1};
+		deque_grow_to_new_blocks_count_impl<allocator>(controller, toallocate);
 	}
 	else
 	{
@@ -425,7 +430,7 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 
 	back_block.controller_ptr = front_block.controller_ptr = controller_block.controller_start_reserved_ptr = controller_block.controller_start_ptr = ::std::construct_at(allocated_blocks_ptr, begin_ptr);
 
-	*(controller_block.controller_after_reserved_ptr = allocated_blocks_ptr + 1) = nullptr;
+	*(controller_block.controller_after_reserved_ptr = allocated_blocks_ptr + 1) = nullptr; // set nullptr as a sentinel
 
 	controller_block.controller_after_ptr = allocated_blocks_ptr + allocated_blocks_count;
 	::std::size_t halfsize{bytes >> 1u};
@@ -440,22 +445,28 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_grow_back_common_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes) noexcept
 {
-	::std::size_t const diff_to_after_ptr{static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.back_block.controller_ptr)};
+	if (controller.controller_block.controller_start_ptr == nullptr)
+	{
+		::fast_io::containers::details::deque_allocate_on_empty_common_impl<allocator>(controller, align, bytes);
+		return;
+	}
+	::std::size_t const diff_to_after_ptr{static_cast<::std::size_t>(controller.controller_block.controller_after_reserved_ptr - controller.back_block.controller_ptr)};
+	constexpr bool isvoidplaceholder{::std::same_as<typename dequecontroltype::replacetype, void>};
+	using begin_ptrtype = ::std::conditional_t<isvoidplaceholder, ::std::byte *, typename dequecontroltype::replacetype *>;
+
 	if (diff_to_after_ptr < 2zu)
 	{
 		if (!diff_to_after_ptr)
 		{
-			::fast_io::containers::details::deque_allocate_on_empty_common_impl<allocator>(controller, align, bytes);
-			return;
-		}
-		if (controller.controller_block.controller_after_reserved_ptr == controller.controller_block.controller_after_ptr)
-		{
 			::fast_io::containers::details::deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
 		}
+		constexpr bool isvoidplaceholder{::std::same_as<typename dequecontroltype::replacetype, void>};
+		using begin_ptrtype = ::std::conditional_t<isvoidplaceholder, ::std::byte *, typename dequecontroltype::replacetype *>;
+
+		auto begin_ptr{static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes))};
+		*(controller.controller_block.controller_after_reserved_ptr = (::std::construct_at(controller.controller_block.controller_after_reserved_ptr, begin_ptr)) + 1) = nullptr;
 	}
 
-	constexpr bool isvoidplaceholder{::std::same_as<typename dequecontroltype::replacetype, void>};
-	using begin_ptrtype = ::std::conditional_t<isvoidplaceholder, ::std::byte *, typename dequecontroltype::replacetype *>;
 	auto begin_ptr{static_cast<begin_ptrtype>(controller.back_block.curr_ptr = (controller.back_block.begin_ptr = (*++controller.back_block.controller_ptr)))};
 
 	controller.back_block.end_ptr = (begin_ptr + bytes);
