@@ -455,10 +455,14 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_grow_back_common_impl(
 	dequecontroltype &controller,
-	::std::size_t align,
-	::std::size_t bytes) noexcept
+	std::size_t align,
+	std::size_t bytes) noexcept
 {
-	// Case 1: empty deque → allocate initial controller + one block
+	/**
+	 * If the deque is empty, allocate the initial controller array
+	 * and a single data block. This sets up the initial front/back
+	 * block pointers and the sentinel.
+	 */
 	if (controller.controller_block.controller_start_ptr == nullptr)
 	{
 		::fast_io::containers::details::
@@ -467,44 +471,93 @@ inline constexpr void deque_grow_back_common_impl(
 	}
 
 	using replacetype = typename dequecontroltype::replacetype;
-	constexpr bool isvoidplaceholder = ::std::same_as<replacetype, void>;
+	constexpr bool isvoidplaceholder = std::same_as<replacetype, void>;
 	using begin_ptrtype =
-		::std::conditional_t<isvoidplaceholder, ::std::byte *, replacetype *>;
+		std::conditional_t<isvoidplaceholder, std::byte *, replacetype *>;
 
-	// How many controller slots remain before hitting controller_after_reserved_ptr?
-	::std::size_t const diff_to_after_ptr =
-		static_cast<::std::size_t>(
+	/**
+	 * Compute how many controller slots remain between the current
+	 * back block and controller_after_reserved_ptr.
+	 *
+	 * We require at least:
+	 *   - 1 slot for the new block pointer
+	 *   - 1 slot for the sentinel nullptr
+	 */
+	std::size_t diff_to_after_ptr =
+		static_cast<std::size_t>(
 			controller.controller_block.controller_after_reserved_ptr -
 			controller.back_block.controller_ptr);
 
-	// Need at least 2 slots: one for new block, one for sentinel
-	if (diff_to_after_ptr < 2zu)
+	if (diff_to_after_ptr < 2)
 	{
-		// No space at all → must rebalance or grow controller array
-		::fast_io::containers::details::
-			deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
+		/**
+		 * If controller_after_reserved_ptr == controller_after_ptr,
+		 * the controller array is physically full. We must rebalance
+		 * or grow the controller array before inserting anything.
+		 */
+		if (controller.controller_block.controller_after_reserved_ptr ==
+			controller.controller_block.controller_after_ptr)
+		{
+			::fast_io::containers::details::
+				deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
+		}
 
-		// Now we have at least 1 slot; allocate a new block and append it
-		auto new_block =
-			static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
+		begin_ptrtype new_block;
 
-		// Write block pointer at controller_after_reserved_ptr
+		/**
+		 * Borrow a capacity block from the front if available.
+		 *
+		 * A capacity block exists at the front if
+		 * controller_start_reserved_ptr != front_block.controller_ptr.
+		 *
+		 * Such a block contains no constructed elements and its memory
+		 * can be reused directly as the new back block.
+		 */
+		if (controller.controller_block.controller_start_reserved_ptr !=
+			controller.front_block.controller_ptr)
+		{
+			auto start_reserved_ptr =
+				controller.controller_block.controller_start_reserved_ptr;
+
+			/* Destroy the pointer object (no-op for trivially destructible types). */
+			std::destroy_at(start_reserved_ptr);
+
+			/* Reuse the block memory. */
+			new_block = static_cast<begin_ptrtype>(*start_reserved_ptr);
+
+			/* Consume one reserved block from the front. */
+			++controller.controller_block.controller_start_reserved_ptr;
+		}
+		else
+		{
+			/**
+			 * No front capacity block is available. Allocate a new block.
+			 */
+			new_block =
+				static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
+		}
+
+		/**
+		 * Insert the new block pointer at controller_after_reserved_ptr,
+		 * then advance controller_after_reserved_ptr and write the sentinel.
+		 */
 		auto pos = controller.controller_block.controller_after_reserved_ptr;
-		::std::construct_at(pos, new_block);
-
-		// Advance after_reserved_ptr and write sentinel
-		*(controller.controller_block.controller_after_reserved_ptr = pos + 1u) = nullptr;
+		std::construct_at(pos, new_block);
+		*(controller.controller_block.controller_after_reserved_ptr = pos + 1) = nullptr;
 	}
 
-	// Now we definitely have space for a new block pointer
-	// Advance controller pointer to the next block slot
+	/**
+	 * At this point, we have guaranteed controller capacity.
+	 * Advance back_block.controller_ptr to the new block slot.
+	 */
 	++controller.back_block.controller_ptr;
 
-	// Load the block pointer
+	/**
+	 * Load the block pointer and initialize begin/curr/end pointers.
+	 */
 	auto begin_ptr =
 		static_cast<begin_ptrtype>(*controller.back_block.controller_ptr);
 
-	// Update block range
 	controller.back_block.begin_ptr = begin_ptr;
 	controller.back_block.curr_ptr = begin_ptr;
 	controller.back_block.end_ptr = begin_ptr + bytes;
