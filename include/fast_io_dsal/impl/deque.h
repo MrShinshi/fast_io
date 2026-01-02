@@ -374,28 +374,27 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
 	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least + 1zu);
+	--new_blocks_count;
 
 	// number of used slots (excluding sentinel)
 	::std::size_t const used_blocks_count{old_after_reserved_ptr_pos - old_start_reserved_ptr_pos};
 
 	// put used blocks roughly in the middle, with some headroom on both sides
-	::std::size_t const new_blocks_offset{(new_blocks_count - used_blocks_count) >> 1u};
+	::std::size_t const new_blocks_offset{static_cast<::std::size_t>(new_blocks_count - used_blocks_count) >> 1u};
 
 	auto new_start_reserved_ptr{new_start_ptr + new_blocks_offset};
 	auto new_after_reserved_ptr{::std::uninitialized_copy(old_start_reserved_ptr, old_after_reserved_ptr, new_start_reserved_ptr)};
 
 	// sentinel
 	*new_after_reserved_ptr = nullptr;
-	++new_after_reserved_ptr;
-
 	// free old controller array
 	block_typed_allocator::deallocate_n(old_start_ptr, old_after_ptr_pos + 1zu);
 
 	// rebuild controller bookkeeping
 	controller.controller_block.controller_start_ptr = new_start_ptr;
 	controller.controller_block.controller_start_reserved_ptr = new_start_reserved_ptr;
-	controller.controller_block.controller_after_reserved_ptr = new_after_reserved_ptr - 1;
-	controller.controller_block.controller_after_ptr = new_start_ptr + (new_blocks_count - 1zu);
+	controller.controller_block.controller_after_reserved_ptr = new_after_reserved_ptr;
+	controller.controller_block.controller_after_ptr = new_start_ptr + new_blocks_count;
 
 	// adjust front/back controller_ptr
 	controller.front_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_front_block_ptr_pos - old_start_reserved_ptr_pos));
@@ -430,6 +429,7 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 	}
 	else
 	{
+
 		// Rebalance in-place: move reserved range toward the middle
 		auto start_ptr{controller.controller_block.controller_start_ptr};
 		auto start_reserved_ptr{controller.controller_block.controller_start_reserved_ptr};
@@ -526,11 +526,8 @@ inline constexpr void deque_grow_back_common_impl(
 	if (diff_to_after_ptr < 2zu)
 	{
 		// No space at all → must rebalance or grow controller array
-		if (!diff_to_after_ptr)
-		{
-			::fast_io::containers::details::
-				deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
-		}
+		::fast_io::containers::details::
+			deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
 
 		// Now we have at least 1 slot; allocate a new block and append it
 		auto new_block =
@@ -541,7 +538,7 @@ inline constexpr void deque_grow_back_common_impl(
 		::std::construct_at(pos, new_block);
 
 		// Advance after_reserved_ptr and write sentinel
-		*(controller.controller_block.controller_after_reserved_ptr = pos + 1) = nullptr;
+		*(controller.controller_block.controller_after_reserved_ptr = pos + 1u) = nullptr;
 	}
 
 	// Now we definitely have space for a new block pointer
