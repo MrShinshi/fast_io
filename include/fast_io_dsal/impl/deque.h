@@ -501,49 +501,55 @@ inline constexpr void deque_grow_back_common_impl(
 			::fast_io::containers::details::
 				deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
 		}
-
-		begin_ptrtype new_block;
-
-		/**
-		 * Borrow a capacity block from the front if available.
-		 *
-		 * A capacity block exists at the front if
-		 * controller_start_reserved_ptr != front_block.controller_ptr.
-		 *
-		 * Such a block contains no constructed elements and its memory
-		 * can be reused directly as the new back block.
-		 */
-		if (controller.controller_block.controller_start_reserved_ptr !=
-			controller.front_block.controller_ptr)
+		std::size_t diff_to_after_ptr2 =
+			static_cast<std::size_t>(
+				controller.controller_block.controller_after_reserved_ptr -
+				controller.back_block.controller_ptr);
+		if (diff_to_after_ptr2 < 2)
 		{
-			auto start_reserved_ptr =
-				controller.controller_block.controller_start_reserved_ptr;
+			begin_ptrtype new_block;
 
-			/* Destroy the pointer object (no-op for trivially destructible types). */
-			std::destroy_at(start_reserved_ptr);
-
-			/* Reuse the block memory. */
-			new_block = static_cast<begin_ptrtype>(*start_reserved_ptr);
-
-			/* Consume one reserved block from the front. */
-			++controller.controller_block.controller_start_reserved_ptr;
-		}
-		else
-		{
 			/**
-			 * No front capacity block is available. Allocate a new block.
+			 * Borrow a capacity block from the front if available.
+			 *
+			 * A capacity block exists at the front if
+			 * controller_start_reserved_ptr != front_block.controller_ptr.
+			 *
+			 * Such a block contains no constructed elements and its memory
+			 * can be reused directly as the new back block.
 			 */
-			new_block =
-				static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
-		}
+			if (controller.controller_block.controller_start_reserved_ptr !=
+				controller.front_block.controller_ptr)
+			{
+				auto start_reserved_ptr =
+					controller.controller_block.controller_start_reserved_ptr;
 
-		/**
-		 * Insert the new block pointer at controller_after_reserved_ptr,
-		 * then advance controller_after_reserved_ptr and write the sentinel.
-		 */
-		auto pos = controller.controller_block.controller_after_reserved_ptr;
-		std::construct_at(pos, new_block);
-		*(controller.controller_block.controller_after_reserved_ptr = pos + 1) = nullptr;
+				/* Destroy the pointer object (no-op for trivially destructible types). */
+				std::destroy_at(start_reserved_ptr);
+
+				/* Reuse the block memory. */
+				new_block = static_cast<begin_ptrtype>(*start_reserved_ptr);
+
+				/* Consume one reserved block from the front. */
+				++controller.controller_block.controller_start_reserved_ptr;
+			}
+			else
+			{
+				/**
+				 * No front capacity block is available. Allocate a new block.
+				 */
+				new_block =
+					static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
+			}
+
+			/**
+			 * Insert the new block pointer at controller_after_reserved_ptr,
+			 * then advance controller_after_reserved_ptr and write the sentinel.
+			 */
+			auto pos = controller.controller_block.controller_after_reserved_ptr;
+			std::construct_at(pos, new_block);
+			*(controller.controller_block.controller_after_reserved_ptr = pos + 1) = nullptr;
+		}
 	}
 
 	/**
