@@ -330,7 +330,6 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	auto old_after_reserved_ptr{controller.controller_block.controller_after_reserved_ptr};
 
 	::std::size_t const old_start_reserved_ptr_pos{static_cast<::std::size_t>(old_start_reserved_ptr - old_start_ptr)};
-	::std::size_t const old_after_reserved_ptr_pos{static_cast<::std::size_t>(old_after_reserved_ptr - old_start_ptr)};
 	::std::size_t const old_after_ptr_pos{static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - old_start_ptr)};
 	::std::size_t const old_front_block_ptr_pos{static_cast<::std::size_t>(controller.front_block.controller_ptr - old_start_ptr)};
 	::std::size_t const old_back_block_ptr_pos{static_cast<::std::size_t>(controller.back_block.controller_ptr - old_start_ptr)};
