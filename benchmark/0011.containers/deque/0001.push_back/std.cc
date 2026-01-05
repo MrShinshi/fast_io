@@ -4,11 +4,12 @@
 
 int main()
 {
-	fast_io::timer tm(u8"std::deque::push_back");
-	std::deque<std::size_t> vec;
+	fast_io::timer tm(u8"std::deque::push_back total");
+	std::deque<std::size_t> deq;
 	constexpr std::size_t n{100000000};
+	fast_io::timer tm1(u8"std::deque::push_back");
 	for (std::size_t i{}; i != n; ++i)
 	{
-		vec.push_back(i);
+		deq.push_back(i);
 	}
 }
