@@ -564,16 +564,6 @@ inline constexpr void deque_grow_back_common_impl(
 			 */
 			auto pos{controller.controller_block.controller_after_reserved_ptr};
 			std::construct_at(pos, new_block);
-#if 0
-			debug_println(::std::source_location::current(),
-				"\tcontroller_start_ptr=",
-				pointervw(controller.controller_block.controller_start_ptr),
-				"\tcontroller_after_reserved_ptr=",
-				pointervw(controller.controller_block.controller_after_reserved_ptr),
-				"\tcontroller_after_ptr=",
-				pointervw(controller.controller_block.controller_after_ptr),
-				"\tpos=",pointervw(pos));
-#endif
 			*(controller.controller_block.controller_after_reserved_ptr = pos + 1) = nullptr;
 		}
 	}
@@ -601,51 +591,68 @@ inline constexpr void deque_grow_front_common_impl(
 	std::size_t align,
 	std::size_t bytes) noexcept
 {
-	using replacetype = typename dequecontroltype::replacetype;
-	constexpr bool isvoidplaceholder = std::same_as<replacetype, void>;
-	using begin_ptrtype =
-		std::conditional_t<isvoidplaceholder, std::byte *, replacetype *>;
-
-	auto &cb = controller.controller_block;
-
-	// Case 1: empty deque → same as back
-	if (cb.controller_start_ptr == nullptr)
+	/**
+	 * If the deque is empty, allocate the initial controller array
+	 * and a single data block. This sets up the initial front/back
+	 * block pointers and the sentinel.
+	 */
+	if (controller.controller_block.controller_start_ptr == nullptr)
 	{
 		::fast_io::containers::details::
 			deque_allocate_on_empty_common_impl<allocator>(controller, align, bytes);
 		return;
 	}
 
-	// How many free controller slots exist before front_block.controller_ptr?
-	std::size_t diff_to_start_reserved =
-		static_cast<std::size_t>(controller.front_block.controller_ptr -
-								 cb.controller_start_reserved_ptr);
-
-	// Need at least 1 free slot to prepend a block
-	if (!diff_to_start_reserved)
+	using replacetype = typename dequecontroltype::replacetype;
+	constexpr bool isvoidplaceholder = std::same_as<replacetype, void>;
+	using begin_ptrtype =
+		std::conditional_t<isvoidplaceholder, std::byte *, replacetype *>;
+	if (controller.front_block.controller_ptr ==
+		controller.controller_block.controller_start_reserved_ptr)
 	{
-		::fast_io::containers::details::
-			deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
-		// Now we definitely have space
-		auto begin_ptr =
-			static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
+		if (controller.controller_block.controller_start_reserved_ptr ==
+			controller.controller_block.controller_start_ptr)
+		{
+			::fast_io::containers::details::
+				deque_rebalance_or_grow_2x_after_blocks_impl<allocator>(controller);
+		}
+		if (controller.front_block.controller_ptr ==
+			controller.controller_block.controller_start_reserved_ptr)
+		{
+			begin_ptrtype new_block;
+			auto after_reserved_ptr =
+				controller.controller_block.controller_after_reserved_ptr;
+			std::size_t diff_to_after_ptr =
+				static_cast<std::size_t>(
+					after_reserved_ptr -
+					controller.back_block.controller_ptr);
+			if (1 < diff_to_after_ptr)
+			{
+				/* Reuse the block memory. */
+				new_block = static_cast<begin_ptrtype>(*after_reserved_ptr);
 
-		// Insert BEFORE current front block
-		auto new_slot = controller.front_block.controller_ptr - 1;
-		std::construct_at(new_slot, begin_ptr);
+				/* Consume one reserved block from the back. */
+				*(controller.controller_block.controller_after_reserved_ptr = after_reserved_ptr - 1) = nullptr;
+			}
+			else
+			{
+				new_block =
+					static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
+			}
+			using namespace ::fast_io::iomnp;
+
+			auto pos{--controller.controller_block.controller_start_reserved_ptr};
+			std::construct_at(pos, new_block);
+		}
 	}
 
-	auto new_slot{controller.front_block.controller_ptr - 1};
-	auto begin_ptr{static_cast<begin_ptrtype>(*new_slot)};
-	// Move front_block.controller_ptr to new block
-	controller.front_block.controller_ptr = new_slot;
+	--controller.front_block.controller_ptr;
 
-	// Update block pointers
+	auto begin_ptr =
+		static_cast<begin_ptrtype>(*controller.front_block.controller_ptr);
+
 	controller.front_block.begin_ptr = begin_ptr;
-	controller.front_block.end_ptr = begin_ptr + bytes;
-
-	// curr_ptr starts at end (push_front will --curr_ptr)
-	controller.front_block.curr_ptr = controller.front_block.end_ptr;
+	controller.front_block.end_ptr = (controller.front_block.curr_ptr = (begin_ptr + bytes));
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
