@@ -91,13 +91,32 @@ struct deque_iterator
 	using difference_type = ::std::ptrdiff_t;
 
 	deque_control_block<T> itercontent;
-
+#if __has_cpp_attribute(clang::no_sanitize)
+	[[clang::no_sanitize("undefined")]]
+#endif
 	inline constexpr deque_iterator &operator++() noexcept
 	{
 		if (++itercontent.curr_ptr == itercontent.end_ptr) [[unlikely]]
 		{
 			constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-			itercontent.end_ptr = ((itercontent.curr_ptr = itercontent.begin_ptr = (*++itercontent.controller_ptr)) + blocksize);
+			auto tmp{(itercontent.curr_ptr = itercontent.begin_ptr = (*++itercontent.controller_ptr))};
+			constexpr bool ubsandisabled{
+#if __has_cpp_attribute(clang::no_sanitize)
+				true
+#endif
+			};
+			if constexpr (ubsandisabled)
+			{
+				tmp += blocksize;
+			}
+			else
+			{
+				if (tmp) [[likely]] // this makes no sense for sentinel
+				{
+					tmp += blocksize;
+				}
+			}
+			itercontent.end_ptr = tmp;
 		}
 		return *this;
 	}
@@ -442,7 +461,7 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 
 	*(controller_block.controller_after_reserved_ptr = allocated_mid_block + 1) = nullptr; // set nullptr as a sentinel
 
-	controller_block.controller_after_ptr = allocated_mid_block + allocated_blocks_count;
+	controller_block.controller_after_ptr = allocated_blocks_ptr + allocated_blocks_count;
 	::std::size_t halfsize{bytes >> 1u};
 
 	back_block.begin_ptr = front_block.begin_ptr = begin_ptr;
@@ -487,7 +506,6 @@ inline constexpr void deque_grow_back_common_impl(
 		static_cast<std::size_t>(
 			controller.controller_block.controller_after_reserved_ptr -
 			controller.back_block.controller_ptr);
-
 	if (diff_to_after_ptr < 2)
 	{
 		/**
@@ -538,13 +556,24 @@ inline constexpr void deque_grow_back_common_impl(
 				new_block =
 					static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
 			}
+			using namespace ::fast_io::iomnp;
 
 			/**
 			 * Insert the new block pointer at controller_after_reserved_ptr,
 			 * then advance controller_after_reserved_ptr and write the sentinel.
 			 */
-			auto pos = controller.controller_block.controller_after_reserved_ptr;
+			auto pos{controller.controller_block.controller_after_reserved_ptr};
 			std::construct_at(pos, new_block);
+#if 0
+			debug_println(::std::source_location::current(),
+				"\tcontroller_start_ptr=",
+				pointervw(controller.controller_block.controller_start_ptr),
+				"\tcontroller_after_reserved_ptr=",
+				pointervw(controller.controller_block.controller_after_reserved_ptr),
+				"\tcontroller_after_ptr=",
+				pointervw(controller.controller_block.controller_after_ptr),
+				"\tpos=",pointervw(pos));
+#endif
 			*(controller.controller_block.controller_after_reserved_ptr = pos + 1) = nullptr;
 		}
 	}
