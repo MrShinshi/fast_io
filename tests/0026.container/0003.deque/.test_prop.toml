@@ -4,7 +4,3 @@ ignore = true
 ignore = true
 ["test_deque.cc"]
 ignore = true
-["test_push_back.cc"]
-ignore = true
-["test_push_front.cc"]
-ignore = true

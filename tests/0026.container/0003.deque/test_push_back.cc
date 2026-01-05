@@ -1,17 +1,16 @@
-﻿#include <fast_io_dsal/deque.h>
-#include <fast_io.h>
+﻿#include <fast_io.h>
+#include <fast_io_dsal/deque.h>
 
 int main()
 {
-	::fast_io::deque<int> dq;
-	dq.push_back(4);
-	dq.push_back(6);
-#if 0
-	static_assert(::std::random_access_iterator<decltype(dq.begin())>);
-	::fast_io::io::println("diff:", dq.end() - dq.begin());
+	::fast_io::deque<::std::size_t> dq;
+	for (::std::size_t i{}; i != 4096u; ++i)
+	{
+		dq.push_back(i);
+	}
+
 	for (auto const &e : dq)
 	{
 		::fast_io::io::println(e);
 	}
-#endif
 }

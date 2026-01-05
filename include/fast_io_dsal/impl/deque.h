@@ -336,7 +336,7 @@ struct
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &controller, ::std::size_t new_blocks_count_least) noexcept
 {
-#if 1
+#if 0
 	::fast_io::iomnp::debug_println(::std::source_location::current());
 #endif
 	auto old_start_ptr{controller.controller_block.controller_start_ptr};
@@ -419,7 +419,7 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 	auto const half_slots_count{static_cast<::std::size_t>(total_slots_count >> 1u)};
 	if (half_slots_count < used_blocks_count) // grow blocks
 	{
-#if 1
+#if 0
 		::fast_io::iomnp::debug_println(::std::source_location::current());
 #endif
 		constexpr ::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
@@ -433,7 +433,7 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 	}
 	else
 	{
-#if 1
+#if 0
 		::fast_io::iomnp::debug_println(::std::source_location::current());
 #endif
 		// balance blocks
@@ -461,7 +461,7 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 		{
 			::std::ptrdiff_t diff{slots_pivot - used_blocks_pivot};
 			::fast_io::freestanding::overlapped_copy(start_reserved_ptr,
-													 after_reserved_ptr, start_reserved_ptr - diff);
+													 after_reserved_ptr, start_reserved_ptr + diff);
 			controller.front_block.controller_ptr += diff;
 			controller.back_block.controller_ptr += diff;
 			controller.controller_block.controller_start_reserved_ptr += diff;
@@ -600,6 +600,15 @@ inline constexpr void deque_grow_back_common_impl(
 		}
 	}
 
+	if (controller.back_block.controller_ptr == controller.front_block.controller_ptr && controller.front_block.curr_ptr == controller.front_block.end_ptr)
+	{
+		auto front_block_controller_ptr{controller.front_block.controller_ptr + 1};
+		controller.front_block.controller_ptr = front_block_controller_ptr;
+		auto front_begin_ptr = static_cast<begin_ptrtype>(*front_block_controller_ptr);
+		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
+		controller.front_block.end_ptr = front_begin_ptr + bytes;
+	}
+
 	/**
 	 * At this point, we have guaranteed controller capacity.
 	 * Advance back_block.controller_ptr to the new block slot.
@@ -615,7 +624,10 @@ inline constexpr void deque_grow_back_common_impl(
 	controller.back_block.begin_ptr = begin_ptr;
 	controller.back_block.curr_ptr = begin_ptr;
 	controller.back_block.end_ptr = begin_ptr + bytes;
+
+#if 0
 	::fast_io::iomnp::debug_println(::std::source_location::current());
+#endif
 }
 
 template <typename allocator, typename dequecontroltype>
@@ -691,7 +703,7 @@ inline constexpr void deque_grow_front_common_impl(
 
 	auto begin_ptr =
 		static_cast<begin_ptrtype>(*controller.front_block.controller_ptr);
-#if 1
+#if 0
 	::fast_io::iomnp::debug_println(::std::source_location::current(),
 									"\n\tcontroller_ptr:", ::fast_io::iomnp::pointervw(controller.front_block.controller_ptr),
 									"\n\tbegin_ptr:", ::fast_io::iomnp::pointervw(begin_ptr),
@@ -813,7 +825,7 @@ private:
 
 	inline constexpr void back_backspace() noexcept
 	{
-		controller.back_block.curr_ptr = controller.back_block.end_ptr = (controller.back_block.begin_ptr = *--controller.back_block.controller_ptr) + block_size;
+		controller.back_block.curr_ptr = (controller.back_block.end_ptr = ((controller.back_block.begin_ptr = *--controller.back_block.controller_ptr) + block_size));
 	}
 
 public:
