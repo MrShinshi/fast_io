@@ -556,7 +556,6 @@ inline constexpr void deque_grow_back_common_impl(
 				new_block =
 					static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
 			}
-			using namespace ::fast_io::iomnp;
 
 			/**
 			 * Insert the new block pointer at controller_after_reserved_ptr,
@@ -639,7 +638,6 @@ inline constexpr void deque_grow_front_common_impl(
 				new_block =
 					static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes));
 			}
-			using namespace ::fast_io::iomnp;
 
 			auto pos{--controller.controller_block.controller_start_reserved_ptr};
 			std::construct_at(pos, new_block);
