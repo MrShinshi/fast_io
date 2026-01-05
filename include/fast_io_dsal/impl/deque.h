@@ -331,28 +331,21 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
 	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least + 1zu);
 	--new_blocks_count;
-
-	// number of used slots (excluding sentinel)
 	::std::size_t const used_blocks_count{old_after_reserved_ptr_pos - old_start_reserved_ptr_pos};
 
-	// put used blocks roughly in the middle, with some headroom on both sides
 	::std::size_t const new_blocks_offset{static_cast<::std::size_t>(new_blocks_count - used_blocks_count) >> 1u};
 
 	auto new_start_reserved_ptr{new_start_ptr + new_blocks_offset};
 	auto new_after_reserved_ptr{::std::uninitialized_copy(old_start_reserved_ptr, old_after_reserved_ptr, new_start_reserved_ptr)};
 
-	// sentinel
 	*new_after_reserved_ptr = nullptr;
-	// free old controller array
-	block_typed_allocator::deallocate_n(old_start_ptr, old_after_ptr_pos + 1zu);
+	block_typed_allocator::deallocate_n(old_start_ptr, static_cast<::std::size_t>(old_after_ptr_pos + 1u));
 
-	// rebuild controller bookkeeping
 	controller.controller_block.controller_start_ptr = new_start_ptr;
 	controller.controller_block.controller_start_reserved_ptr = new_start_reserved_ptr;
 	controller.controller_block.controller_after_reserved_ptr = new_after_reserved_ptr;
 	controller.controller_block.controller_after_ptr = new_start_ptr + new_blocks_count;
 
-	// adjust front/back controller_ptr
 	controller.front_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_front_block_ptr_pos - old_start_reserved_ptr_pos));
 	controller.back_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_back_block_ptr_pos - old_start_reserved_ptr_pos));
 }
@@ -360,65 +353,55 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontroltype &controller) noexcept
 {
-	::std::size_t const used_blocks_count{
+	auto const used_blocks_count{
 		static_cast<::std::size_t>(controller.back_block.controller_ptr - controller.front_block.controller_ptr) + 1zu};
-
-	::std::size_t const total_blocks{
-		static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.controller_block.controller_start_ptr)};
-
-	::std::size_t const total_blocks_half{total_blocks >> 1u};
-
-	if (total_blocks_half < used_blocks_count)
+	auto const total_slots_count{
+		static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.controller_start_ptr)};
+	auto const half_slots_count{static_cast<::std::size_t>(total_slots_count >> 1u)};
+	if (half_slots_count < used_blocks_count) // grow blocks
 	{
-		constexpr ::std::size_t maxcount{
-			static_cast<::std::size_t>(::std::numeric_limits<::std::size_t>::max() / sizeof(void *))};
-		constexpr ::std::size_t mxtoalign{static_cast<::std::size_t>(maxcount - 1u)};
-		constexpr ::std::size_t mxtoaligndiv2{mxtoalign >> 1u};
-
-		if (mxtoaligndiv2 < total_blocks)
+		constexpr ::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
+		constexpr ::std::size_t mxdv2m1{(mx >> 1u) - 1u};
+		if (mxdv2m1 < total_slots_count)
 		{
 			::fast_io::fast_terminate();
 		}
-
-		::std::size_t const toallocate{total_blocks << 1u};
-		deque_grow_to_new_blocks_count_impl<allocator>(controller, toallocate);
+		::fast_io::containers::details::deque_grow_to_new_blocks_count_impl<allocator>(controller,
+																					   static_cast<::std::size_t>((total_slots_count << 1u) + 1u));
 	}
 	else
 	{
-
-		// Rebalance in-place: move reserved range toward the middle
-		auto start_ptr{controller.controller_block.controller_start_ptr};
+		// balance blocks
 		auto start_reserved_ptr{controller.controller_block.controller_start_reserved_ptr};
 		auto after_reserved_ptr{controller.controller_block.controller_after_reserved_ptr};
-
-		::std::size_t const old_start_reserved_pos{static_cast<::std::size_t>(start_reserved_ptr - start_ptr)};
-		::std::size_t const old_after_reserved_pos{static_cast<::std::size_t>(after_reserved_ptr - start_ptr)};
-		::std::size_t const used{old_after_reserved_pos - old_start_reserved_pos};
-
-		::std::size_t const new_start_reserved_pos{(total_blocks - used) >> 1u};
-		auto new_start_reserved_ptr{start_ptr + new_start_reserved_pos};
-
-		if (new_start_reserved_ptr != start_reserved_ptr)
+		auto const reserved_blocks_count{
+			static_cast<::std::size_t>(after_reserved_ptr - start_reserved_ptr)};
+		auto const half_reserved_blocks_count{
+			static_cast<::std::size_t>(reserved_blocks_count >> 1u)};
+		auto reserved_pivot{start_reserved_ptr + half_reserved_blocks_count};
+		auto const half_used_blocks_count{
+			static_cast<::std::size_t>(used_blocks_count >> 1u)};
+		auto used_blocks_pivot{controller.front_block.controller_ptr + half_used_blocks_count};
+		if (used_blocks_pivot != reserved_pivot)
 		{
-			if (start_reserved_ptr < new_start_reserved_ptr)
-			{
-				::std::copy_backward(start_reserved_ptr, after_reserved_ptr, new_start_reserved_ptr + used);
-			}
-			else
-			{
-				::std::copy(start_reserved_ptr, after_reserved_ptr, new_start_reserved_ptr);
-			}
+			::std::ptrdiff_t diff{reserved_pivot - used_blocks_pivot};
+			auto rotate_pivot{diff < 0 ? after_reserved_ptr + diff : start_reserved_ptr + diff};
+			::std::rotate(start_reserved_ptr, rotate_pivot, after_reserved_ptr);
+			controller.front_block.controller_ptr += diff;
+			controller.back_block.controller_ptr += diff;
 		}
 
-		controller.controller_block.controller_start_reserved_ptr = new_start_reserved_ptr;
-		controller.controller_block.controller_after_reserved_ptr = new_start_reserved_ptr + used;
-		*(controller.controller_block.controller_after_reserved_ptr) = nullptr;
-
-		// adjust front/back controller_ptr according to the shift
-		::std::size_t const delta{new_start_reserved_pos - old_start_reserved_pos};
-
-		controller.front_block.controller_ptr += delta;
-		controller.back_block.controller_ptr += delta;
+		auto slots_pivot{controller.controller_start_ptr + half_slots_count};
+		if (slots_pivot != used_blocks_pivot)
+		{
+			::std::ptrdiff_t diff{slots_pivot - used_blocks_pivot};
+			::fast_io::freestanding::overlapped_copy(start_reserved_ptr,
+													 after_reserved_ptr, start_reserved_ptr - diff);
+			controller.front_block.controller_ptr += diff;
+			controller.back_block.controller_ptr += diff;
+			controller.controller_block.controller_start_reserved_ptr += diff;
+			*(controller.controller_block.controller_after_reserved_ptr += diff) = nullptr;
+		}
 	}
 }
 
@@ -426,7 +409,9 @@ template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes) noexcept
 {
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
-	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(2);
+	constexpr ::std::size_t initial_allocated_block_counts{3};
+	constexpr ::std::size_t initial_allocated_block_counts_with_sentinel{initial_allocated_block_counts + 1u};
+	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(initial_allocated_block_counts_with_sentinel);
 	// we need a null terminator as sentinel like c style string does
 	--allocated_blocks_count;
 	auto &controller_block{controller.controller_block};
@@ -438,11 +423,13 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 
 	auto begin_ptr{static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes))};
 
-	back_block.controller_ptr = front_block.controller_ptr = controller_block.controller_start_reserved_ptr = controller_block.controller_start_ptr = ::std::construct_at(allocated_blocks_ptr, begin_ptr);
+	controller_block.controller_start_ptr = allocated_blocks_ptr;
+	auto allocated_mid_block{allocated_blocks_ptr + (allocated_blocks_count >> 1u)};
+	back_block.controller_ptr = front_block.controller_ptr = controller_block.controller_start_reserved_ptr = ::std::construct_at(allocated_mid_block, begin_ptr);
 
-	*(controller_block.controller_after_reserved_ptr = allocated_blocks_ptr + 1) = nullptr; // set nullptr as a sentinel
+	*(controller_block.controller_after_reserved_ptr = allocated_mid_block + 1) = nullptr; // set nullptr as a sentinel
 
-	controller_block.controller_after_ptr = allocated_blocks_ptr + allocated_blocks_count;
+	controller_block.controller_after_ptr = allocated_mid_block + allocated_blocks_count;
 	::std::size_t halfsize{bytes >> 1u};
 
 	back_block.begin_ptr = front_block.begin_ptr = begin_ptr;
@@ -523,9 +510,6 @@ inline constexpr void deque_grow_back_common_impl(
 			{
 				auto start_reserved_ptr =
 					controller.controller_block.controller_start_reserved_ptr;
-
-				/* Destroy the pointer object (no-op for trivially destructible types). */
-				std::destroy_at(start_reserved_ptr);
 
 				/* Reuse the block memory. */
 				new_block = static_cast<begin_ptrtype>(*start_reserved_ptr);
