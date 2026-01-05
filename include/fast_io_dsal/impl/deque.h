@@ -753,7 +753,7 @@ public:
 private:
 	inline constexpr void destroy_all_elements() noexcept
 	{
-		::std::ranges::destroy(controller.front_block.curr_ptr, controller.front_block.end_ptr);
+		::std::destroy(controller.front_block.curr_ptr, controller.front_block.end_ptr);
 		auto front_controller_ptr{controller.front_block.controller_ptr};
 		auto back_controller_ptr{controller.back_block.controller_ptr};
 		if (front_controller_ptr != back_controller_ptr)
@@ -761,10 +761,10 @@ private:
 			for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
 			{
 				T *blockptr{*it};
-				::std::ranges::destroy(blockptr, blockptr + block_size);
+				::std::destroy(blockptr, blockptr + block_size);
 			}
 		}
-		::std::ranges::destroy(controller.back_block.begin_ptr, controller.back_block.curr_ptr);
+		::std::destroy(controller.back_block.begin_ptr, controller.back_block.curr_ptr);
 	}
 
 	inline constexpr void destroy() noexcept
