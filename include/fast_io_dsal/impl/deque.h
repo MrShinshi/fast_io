@@ -318,21 +318,6 @@ inline constexpr void deque_destroy_trivial_common(controllerblocktype &controll
 	}
 }
 
-/*
-struct
-#if __has_cpp_attribute(__gnu__::__may_alias__)
-	[[__gnu__::__may_alias__]]
-#endif
-	deque_controller_block_common
-{
-	using replacetype = char unsigned;
-	void **controller_start_ptr;
-	void **controller_start_reserved_ptr;
-	void **controller_after_reserved_ptr;
-	void **controller_after_ptr;
-};
-*/
-
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &controller, ::std::size_t new_blocks_count_least) noexcept
 {
@@ -450,16 +435,24 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 		if (used_blocks_pivot != reserved_pivot)
 		{
 			::std::ptrdiff_t diff{reserved_pivot - used_blocks_pivot};
-			auto rotate_pivot{diff < 0 ? after_reserved_ptr + diff : start_reserved_ptr + diff};
+#if 0
+			::fast_io::iomnp::debug_println(::std::source_location::current(),
+			"\tdiff=",diff);
+#endif
+			auto rotate_pivot{diff < 0 ? start_reserved_ptr : after_reserved_ptr};
+			rotate_pivot -= diff;
 			::std::rotate(start_reserved_ptr, rotate_pivot, after_reserved_ptr);
 			controller.front_block.controller_ptr += diff;
 			controller.back_block.controller_ptr += diff;
 		}
 
 		auto slots_pivot{controller.controller_block.controller_start_ptr + half_slots_count};
-		if (slots_pivot != used_blocks_pivot)
+		if (slots_pivot != reserved_pivot)
 		{
-			::std::ptrdiff_t diff{slots_pivot - used_blocks_pivot};
+#if 0
+			::fast_io::iomnp::debug_println(::std::source_location::current());
+#endif
+			::std::ptrdiff_t diff{slots_pivot - reserved_pivot};
 			::fast_io::freestanding::overlapped_copy(start_reserved_ptr,
 													 after_reserved_ptr, start_reserved_ptr + diff);
 			controller.front_block.controller_ptr += diff;
