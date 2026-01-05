@@ -331,14 +331,27 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
 	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least + 1zu);
 	--new_blocks_count;
-	::std::size_t const used_blocks_count{old_after_reserved_ptr_pos - old_start_reserved_ptr_pos};
 
-	::std::size_t const new_blocks_offset{static_cast<::std::size_t>(new_blocks_count - used_blocks_count) >> 1u};
+	auto const old_reserved_blocks_count{
+		static_cast<::std::size_t>(old_after_reserved_ptr - old_start_reserved_ptr)};
+	auto const old_half_reserved_blocks_count{
+		static_cast<::std::size_t>(old_reserved_blocks_count >> 1u)};
+	auto old_reserved_pivot{old_start_reserved_ptr + old_half_reserved_blocks_count};
+	auto const old_used_blocks_count{
+		static_cast<::std::size_t>(controller.back_block.controller_ptr - controller.front_block.controller_ptr) + 1zu};
+	auto const old_half_used_blocks_count{
+		static_cast<::std::size_t>(old_used_blocks_count >> 1u)};
+	auto old_used_blocks_pivot{controller.front_block.controller_ptr + old_half_used_blocks_count};
+
+	::std::ptrdiff_t pivot_diff{old_reserved_pivot - old_used_blocks_pivot};
+
+	::std::size_t const new_blocks_offset{static_cast<::std::size_t>(new_blocks_count - old_reserved_blocks_count) >> 1u};
 
 	auto new_start_reserved_ptr{new_start_ptr + new_blocks_offset};
-	auto new_after_reserved_ptr{::std::uninitialized_copy(old_start_reserved_ptr, old_after_reserved_ptr, new_start_reserved_ptr)};
 
-	*new_after_reserved_ptr = nullptr;
+	auto old_pivot{old_start_reserved_ptr + pivot_diff};
+	auto new_after_reserved_ptr{::fast_io::freestanding::non_overlapped_copy(old_pivot, old_after_reserved_ptr, new_start_reserved_ptr)};
+	*(new_after_reserved_ptr = ::fast_io::freestanding::non_overlapped_copy(old_start_reserved_ptr, old_pivot, new_after_reserved_ptr)) = nullptr;
 	block_typed_allocator::deallocate_n(old_start_ptr, static_cast<::std::size_t>(old_after_ptr_pos + 1u));
 
 	controller.controller_block.controller_start_ptr = new_start_ptr;
@@ -346,8 +359,8 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	controller.controller_block.controller_after_reserved_ptr = new_after_reserved_ptr;
 	controller.controller_block.controller_after_ptr = new_start_ptr + new_blocks_count;
 
-	controller.front_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_front_block_ptr_pos - old_start_reserved_ptr_pos));
-	controller.back_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_back_block_ptr_pos - old_start_reserved_ptr_pos));
+	controller.front_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_front_block_ptr_pos - old_start_reserved_ptr_pos)) + pivot_diff;
+	controller.back_block.controller_ptr = new_start_ptr + (new_blocks_offset + (old_back_block_ptr_pos - old_start_reserved_ptr_pos)) + pivot_diff;
 }
 
 template <typename allocator, typename dequecontroltype>
@@ -356,7 +369,7 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 	auto const used_blocks_count{
 		static_cast<::std::size_t>(controller.back_block.controller_ptr - controller.front_block.controller_ptr) + 1zu};
 	auto const total_slots_count{
-		static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.controller_start_ptr)};
+		static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.controller_block.controller_start_ptr)};
 	auto const half_slots_count{static_cast<::std::size_t>(total_slots_count >> 1u)};
 	if (half_slots_count < used_blocks_count) // grow blocks
 	{
@@ -391,7 +404,7 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 			controller.back_block.controller_ptr += diff;
 		}
 
-		auto slots_pivot{controller.controller_start_ptr + half_slots_count};
+		auto slots_pivot{controller.controller_block.controller_start_ptr + half_slots_count};
 		if (slots_pivot != used_blocks_pivot)
 		{
 			::std::ptrdiff_t diff{slots_pivot - used_blocks_pivot};
