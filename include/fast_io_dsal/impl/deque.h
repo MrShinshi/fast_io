@@ -904,7 +904,8 @@ inline constexpr void deque_clone_trivial_impl(dequecontroltype &controller, deq
 		controller.front_block.end_ptr =
 			::fast_io::freestanding::non_overlapped_copy(fromcontroller.front_block.curr_ptr,
 														 fromcontroller.front_block.end_ptr,
-														 pos + controller.front_block.begin_ptr);
+														 (controller.front_block.curr_ptr =
+															  pos + controller.front_block.begin_ptr));
 		++destit;
 		for (begin_ptrtype *it{front_controller_ptr + 1}, *ed{back_controller_ptr}; it != ed; ++it)
 		{

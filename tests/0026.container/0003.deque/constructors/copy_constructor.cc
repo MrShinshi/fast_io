@@ -24,7 +24,8 @@ inline void test_copy_constructor()
 
     // Copy construct
     ::fast_io::deque<T> dq2(dq);
-
+    ::fast_io::io::println("dq2.size()=",dq2.size(),"\t"
+	"dq.size()=",dq.size());
     // Size must match
     if (dq2.size() != dq.size())
     {
