@@ -414,6 +414,45 @@ inline void test_bitvec_flip()
 	::fast_io::io::print("bitvec flip test finished\n");
 }
 
+inline void test_bitvec_reserve_and_push_back_unchecked()
+{
+	::fast_io::io::perr("=== bitvec reserve + push_back_unchecked test ===\n");
+
+	::fast_io::bitvec bv;
+
+	// Reserve space for 5000 bits
+	bv.reserve(5000);
+
+	if (bv.capacity() < 5000)
+	{
+		::fast_io::io::panic("ERROR: reserve did not increase capacity correctly\n");
+	}
+
+	// Now push bits WITHOUT triggering reallocation
+	// Use push_back_unchecked since we know capacity is sufficient
+	for (::std::size_t i{}; i != 5000u; ++i)
+	{
+		bv.push_back_unchecked((i & 1u) != 0u);
+	}
+
+	if (bv.size() != 5000u)
+	{
+		::fast_io::io::panic("ERROR: size mismatch after push_back_unchecked\n");
+	}
+
+	// Verify pattern
+	for (::std::size_t i{}; i != 5000u; ++i)
+	{
+		bool expected = (i & 1u) != 0u;
+		if (bv.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: push_back_unchecked mismatch at index ", i);
+		}
+	}
+
+	::fast_io::io::print("bitvec reserve + push_back_unchecked test finished\n");
+}
+
 int main()
 {
 	test_bitvec_basic();
@@ -424,6 +463,7 @@ int main()
 	test_bitvec_copy_assignment();
 	test_bitvec_move();
 	test_bitvec_flip();
+	test_bitvec_reserve_and_push_back_unchecked();
 
 	::fast_io::io::print("All bitvec tests finished\n");
 }

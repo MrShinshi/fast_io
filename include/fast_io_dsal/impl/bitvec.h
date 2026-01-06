@@ -85,7 +85,7 @@ private:
 		{
 			current_capacity /= underlying_digits;
 		}
-		constexpr ::std::size_t mxbyteshalf{max_size_bytes() >> 1};
+		constexpr ::std::size_t mxbyteshalf{max_size() >> 1};
 		if (mxbyteshalf < current_capacity)
 		{
 			::fast_io::fast_terminate();
@@ -699,6 +699,28 @@ public:
 	{
 		this->destroy_bitvec();
 		this->imp = {};
+	}
+
+private:
+	inline static constexpr size_type bits_to_blocks(size_type bits) noexcept
+	{
+		if constexpr (underlying_digits == 8)
+		{
+			return (bits + 7) >> 3; // ceil(bits / 8)
+		}
+		else
+		{
+			return (bits + (underlying_digits - 1)) / underlying_digits;
+		}
+	}
+
+public:
+	constexpr void reserve(size_type n) noexcept
+	{
+		if (this->imp.end_pos < n)
+		{
+			this->grow_to_new_capacity(bits_to_blocks(n));
+		}
 	}
 };
 
