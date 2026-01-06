@@ -755,27 +755,22 @@ inline constexpr void deque_clear_common(dequecontroltype &controller) noexcept
 template <typename allocator, bool zeroing, typename dequecontroltype>
 inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t blockbytes, ::std::size_t blocks_count_least) noexcept
 {
-	/*
-	template <typename T>
-	struct deque_controller
-	{
-		using replacetype = T;
-		using controlreplacetype = T *;
-		::fast_io::containers::details::deque_control_block<T> front_block;
-		::fast_io::containers::details::deque_control_block<T> back_block;
-		::fast_io::containers::details::deque_controller_block<T> controller_block;
-	};
-	*/
 	if (!blocks_count_least)
 	{
+		controller = {{}, {}, {}};
 		return;
 	}
+	constexpr ::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
+	if (blocks_count_least == mx)
+	{
+		::fast_io::fast_terminate();
+	}
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
-	auto [start_ptr, blocks_count] = block_typed_allocator::allocate_at_least(blocks_count_least + 1zu);
+	auto [start_ptr, blocks_count] = block_typed_allocator::allocate_at_least(blocks_count_least + 1u);
 	--blocks_count;
 	::std::size_t const half_blocks_count{blocks_count >> 1u};
 	::std::size_t const half_blocks_count_least{blocks_count_least >> 1u};
-	::std::size_t const offset{half_blocks_count_least - half_blocks_count};
+	::std::size_t const offset{half_blocks_count - half_blocks_count_least};
 	auto reserve_start{start_ptr + offset}, reserve_after{reserve_start + blocks_count_least};
 	using begin_ptrtype = typename dequecontroltype::replacetype *;
 	for (auto it{reserve_start}, ed{reserve_after}; it != ed; ++it)
@@ -795,17 +790,9 @@ inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controll
 	begin_ptrtype reserve_start_block{static_cast<begin_ptrtype>(*reserve_start)};
 	controller.front_block = {
 		reserve_start, reserve_start_block, reserve_start_block, reserve_start_block + blockbytes};
-	if constexpr (true)
-	{
-		begin_ptrtype reserve_back_block{static_cast<begin_ptrtype>(reserve_after[-1])};
-		controller.back_block = {
-			reserve_after - 1, reserve_back_block, reserve_back_block + blockbytes, reserve_back_block + blockbytes};
-	}
-	else
-	{
-		controller.back_block = controller.front_block;
-	}
-
+	begin_ptrtype reserve_back_block{static_cast<begin_ptrtype>(reserve_after[-1])};
+	controller.back_block = {
+		reserve_after - 1, reserve_back_block, reserve_back_block, reserve_back_block + blockbytes};
 	controller.controller_block = {
 		start_ptr, reserve_start, reserve_after, start_ptr + blocks_count};
 }
@@ -814,17 +801,22 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_init_space_common(dequecontroltype &controller, ::std::size_t n) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-	::std::size_t const ndivsz{n / sz};
-	::std::size_t const nmodsz{n % sz};
+	::std::size_t const ndivsz{n / block_size};
+	::std::size_t const nmodsz{n % block_size};
 	::std::size_t const counts{ndivsz + static_cast<::std::size_t>(nmodsz != 0u)};
-	::std::size_t const nmodszhalfbytes{sz * static_cast<::std::size_t>(nmodsz >> 1u)};
+
 	::fast_io::containers::details::deque_allocate_init_blocks_impl<allocator, zeroing>(controller, align, blockbytes, counts);
-	using replacetype = typename dequecontroltype::replacetype;
-	using begin_ptrtype = replacetype *;
-	auto &front_curr_ptr{controller.front_block.curr_ptr};
-	front_curr_ptr = (static_cast<begin_ptrtype>(front_curr_ptr) + nmodszhalfbytes);
+	if (!n)
+	{
+		return;
+	}
 	auto &back_curr_ptr{controller.back_block.curr_ptr};
-	back_curr_ptr = (static_cast<begin_ptrtype>(back_curr_ptr) - nmodszhalfbytes);
+	::std::size_t offset_for_back{blockbytes};
+	if (nmodsz)
+	{
+		offset_for_back = nmodsz * sz;
+	}
+	back_curr_ptr += offset_for_back;
 }
 
 template <typename ToIter>
@@ -1015,18 +1007,22 @@ private:
 	template <typename Iter, typename Sentinel>
 	inline constexpr void construct_deque_common_impl(Iter first, Sentinel last)
 	{
+		if (first == last)
+		{
+			controller = {{}, {}, {}};
+			return;
+		}
 		run_destroy des(this);
 		if constexpr (::std::sized_sentinel_for<Sentinel, Iter>)
 		{
-			auto dq_back_backup{this->controller.back_block};
-			this->controller.back_block = this->controller.front_block;
-
 			auto const dist{::std::ranges::distance(first, last)};
 
-			this->init_blocks_common(static_cast<::std::size_t>(dist));
+			this->init_blocks_common<false>(static_cast<::std::size_t>(dist));
 
+			auto dq_back_backup{this->controller.back_block};
 			auto front_controller_ptr{controller.front_block.controller_ptr};
 			auto back_controller_ptr{controller.back_block.controller_ptr};
+			this->controller.back_block = this->controller.front_block;
 
 			T *lastblockbegin;
 			if (front_controller_ptr == back_controller_ptr)
@@ -1035,11 +1031,7 @@ private:
 			}
 			else
 			{
-				first = ::fast_io::containers::details::uninitialized_copy_n_for_deque(first,
-																					   static_cast<::std::size_t>(controller.front_block.end_ptr - controller.front_block.curr_ptr), controller.front_block.curr_ptr)
-							.from;
-				this->controller.back_block.curr_ptr = this->controller.back_block.end_ptr;
-				for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
+				for (T **it{front_controller_ptr}, **ed{back_controller_ptr}; it != ed; ++it)
 				{
 					T *blockptr{*it};
 					first = ::fast_io::containers::details::uninitialized_copy_n_for_deque(first, block_size, blockptr).from;
@@ -1047,7 +1039,10 @@ private:
 				}
 				lastblockbegin = dq_back_backup.begin_ptr;
 			}
-			::fast_io::containers::details::uninitialized_copy_n_for_deque(first, static_cast<::std::size_t>(dq_back_backup.curr_ptr - lastblockbegin), lastblockbegin);
+			::fast_io::containers::details::uninitialized_copy_n_for_deque(
+				first,
+				static_cast<::std::size_t>(dq_back_backup.curr_ptr - lastblockbegin),
+				lastblockbegin);
 			this->controller.back_block = dq_back_backup;
 		}
 		else
