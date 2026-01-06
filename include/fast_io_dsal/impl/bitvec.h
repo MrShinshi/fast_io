@@ -516,6 +516,92 @@ public:
 		this->reset_back_unchecked();
 	}
 
+	inline constexpr void flip_unchecked(size_type pos) noexcept
+	{
+		if constexpr (underlying_digits == 8)
+		{
+			size_type byte_index{pos >> 3}; // pos / 8
+			size_type bit_index{pos & 7};   // pos % 8
+
+			underlying_type &byteval = imp.begin_ptr[byte_index];
+			underlying_type mask = static_cast<underlying_type>(1u << bit_index);
+
+			// Toggle the bit (branchless)
+			byteval ^= mask;
+		}
+		else
+		{
+			size_type byte_index{pos / underlying_digits};
+			size_type bit_index{pos % underlying_digits};
+
+			underlying_type &byteval = imp.begin_ptr[byte_index];
+			underlying_type mask =
+				static_cast<underlying_type>(1u << bit_index);
+
+			byteval ^= mask;
+		}
+	}
+
+	inline constexpr void flip(size_type pos) noexcept
+	{
+		if (this->imp.curr_pos <= pos) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		this->flip_unchecked(pos);
+	}
+
+	inline constexpr void flip_front_unchecked() noexcept
+	{
+		// front bit is always bit 0 of byte 0
+		constexpr underlying_type mask = static_cast<underlying_type>(1u);
+		(*imp.begin_ptr) ^= mask;
+	}
+	inline constexpr void flip_front() noexcept
+	{
+		if (!this->imp.curr_pos) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		this->flip_front_unchecked();
+	}
+
+	inline constexpr void flip_back_unchecked() noexcept
+	{
+		size_type bitpos{imp.curr_pos - 1};
+
+		if constexpr (underlying_digits == 8)
+		{
+			size_type byte_index{bitpos >> 3}; // bitpos / 8
+			size_type bit_index{bitpos & 7};   // bitpos % 8
+
+			underlying_type &byteval = imp.begin_ptr[byte_index];
+			underlying_type mask = static_cast<underlying_type>(1u << bit_index);
+
+			byteval ^= mask;
+		}
+		else
+		{
+			size_type byte_index{bitpos / underlying_digits};
+			size_type bit_index{bitpos % underlying_digits};
+
+			underlying_type &byteval = imp.begin_ptr[byte_index];
+			underlying_type mask =
+				static_cast<underlying_type>(1u << bit_index);
+
+			byteval ^= mask;
+		}
+	}
+
+	inline constexpr void flip_back() noexcept
+	{
+		if (!this->imp.curr_pos) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		this->flip_back_unchecked();
+	}
+
 	constexpr bitvec(bitvec &&other) noexcept : imp{other.imp}
 	{
 		other.imp = {};

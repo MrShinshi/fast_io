@@ -1,5 +1,5 @@
-#include<cstdint>
-#include<fast_io_dsal/bitvec.h>
+#include <cstdint>
+#include <fast_io_dsal/bitvec.h>
 
 extern "C" int LLVMFuzzerTestOneInput(uint8_t const *data, size_t size)
 {

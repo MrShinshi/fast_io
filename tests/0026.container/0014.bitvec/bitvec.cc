@@ -238,9 +238,10 @@ inline void test_bitvec_copy_assignment()
 	::fast_io::bitvec src;
 	::fast_io::bitvec dst;
 
+	// Use a valid mask: (i & 7u) can equal 2u
 	for (::std::size_t i{}; i != 3000u; ++i)
 	{
-		src.push_back((i & 5u) == 2u);
+		src.push_back((i & 7u) == 2u);
 	}
 
 	// Fill dst with garbage first
@@ -273,7 +274,7 @@ inline void test_bitvec_copy_assignment()
 	// dst must remain unchanged
 	for (::std::size_t i{}; i != dst.size(); ++i)
 	{
-		bool expected = ((i & 5u) == 2u);
+		bool expected = ((i & 7u) == 2u);
 		if (dst.test(i) != expected)
 		{
 			::fast_io::io::panicln("ERROR: deep copy violated in assignment at index ", i);
@@ -285,7 +286,7 @@ inline void test_bitvec_copy_assignment()
 
 	for (::std::size_t i{}; i != dst.size(); ++i)
 	{
-		bool expected = ((i & 5u) == 2u);
+		bool expected = ((i & 7u) == 2u);
 		if (dst.test(i) != expected)
 		{
 			::fast_io::io::panicln("ERROR: self-assignment changed data at index ", i);
@@ -331,6 +332,88 @@ inline void test_bitvec_move()
 	::fast_io::io::print("bitvec move test finished\n");
 }
 
+inline void test_bitvec_flip()
+{
+	::fast_io::io::perr("=== bitvec flip test ===\n");
+
+	::fast_io::bitvec bv;
+
+	// Push 64 bits: 0 1 0 1 0 1 ...
+	for (::std::size_t i{}; i != 64u; ++i)
+	{
+		bv.push_back((i & 1u) != 0u);
+	}
+
+	// Flip all bits using checked flip()
+	for (::std::size_t i{}; i != 64u; ++i)
+	{
+		bv.flip(i);
+	}
+
+	// Verify: all bits should now be inverted
+	for (::std::size_t i{}; i != 64u; ++i)
+	{
+		bool expected = ((i & 1u) == 0u); // original was (i&1)!=0, so flipped
+		if (bv.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: flip() mismatch at index ", i);
+		}
+	}
+
+	// Flip again using unchecked version → should restore original pattern
+	for (::std::size_t i{}; i != 64u; ++i)
+	{
+		bv.flip_unchecked(i);
+	}
+
+	for (::std::size_t i{}; i != 64u; ++i)
+	{
+		bool expected = (i & 1u) != 0u;
+		if (bv.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: flip_unchecked() mismatch at index ", i);
+		}
+	}
+
+	// Test flip_front and flip_back
+	// Current front = 0, back = 1
+	if (bv.test_front() != false)
+	{
+		::fast_io::io::panic("ERROR: test_front mismatch before flip_front\n");
+	}
+	if (bv.test_back() != true)
+	{
+		::fast_io::io::panic("ERROR: test_back mismatch before flip_back\n");
+	}
+
+	bv.flip_front();
+	if (bv.test_front() != true)
+	{
+		::fast_io::io::panic("ERROR: flip_front failed\n");
+	}
+
+	bv.flip_back();
+	if (bv.test_back() != false)
+	{
+		::fast_io::io::panic("ERROR: flip_back failed\n");
+	}
+
+	// Now test unchecked versions
+	bv.flip_front_unchecked();
+	if (bv.test_front() != false)
+	{
+		::fast_io::io::panic("ERROR: flip_front_unchecked failed\n");
+	}
+
+	bv.flip_back_unchecked();
+	if (bv.test_back() != true)
+	{
+		::fast_io::io::panic("ERROR: flip_back_unchecked failed\n");
+	}
+
+	::fast_io::io::print("bitvec flip test finished\n");
+}
+
 int main()
 {
 	test_bitvec_basic();
@@ -340,6 +423,7 @@ int main()
 	test_bitvec_copy_constructor();
 	test_bitvec_copy_assignment();
 	test_bitvec_move();
+	test_bitvec_flip();
 
 	::fast_io::io::print("All bitvec tests finished\n");
 }
