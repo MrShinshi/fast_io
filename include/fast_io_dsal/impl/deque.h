@@ -874,6 +874,58 @@ inline constexpr ::fast_io::containers::details::uninitialized_copy_n_for_deque_
 	return {fromiter, toiter};
 }
 
+template <typename allocator, typename dequecontroltype>
+inline constexpr void deque_clone_trivial_impl(dequecontroltype &controller, dequecontroltype const &fromcontroller,
+											   ::std::size_t align, ::std::size_t sz, ::std::size_t blockbytes) noexcept
+{
+	if (fromcontroller.front_block.curr_ptr == fromcontroller.back_block.curr_ptr)
+	{
+		controller = {{}, {}, {}};
+		return;
+	}
+	auto front_controller_ptr{fromcontroller.front_block.controller_ptr};
+	auto back_controller_ptr{fromcontroller.back_block.controller_ptr};
+	::std::size_t blocks_required{static_cast<::std::size_t>(back_controller_ptr -
+															 front_controller_ptr + 1)};
+
+	::fast_io::containers::details::deque_allocate_init_blocks_dezeroing_impl<allocator>(controller, align, blockbytes, blocks_required, false);
+	using replacetype = typename dequecontroltype::replacetype;
+	using begin_ptrtype = replacetype *;
+
+	begin_ptrtype lastblockbegin;
+	if (front_controller_ptr == back_controller_ptr)
+	{
+		lastblockbegin = controller.front_block.curr_ptr;
+	}
+	else
+	{
+		auto destit{controller.front_block.controller_ptr};
+		auto pos{fromcontroller.front_block.curr_ptr - fromcontroller.front_block.begin_ptr};
+		controller.front_block.end_ptr =
+			::fast_io::freestanding::non_overlapped_copy(fromcontroller.front_block.curr_ptr,
+														 fromcontroller.front_block.end_ptr,
+														 pos + controller.front_block.begin_ptr);
+		++destit;
+		for (begin_ptrtype *it{front_controller_ptr + 1}, *ed{back_controller_ptr}; it != ed; ++it)
+		{
+			begin_ptrtype blockptr{*it};
+			::fast_io::freestanding::non_overlapped_copy_n(blockptr, blockbytes, *destit);
+			++destit;
+		}
+		lastblockbegin = fromcontroller.back_block.begin_ptr;
+	}
+	controller.back_block.curr_ptr =
+		::fast_io::freestanding::non_overlapped_copy(lastblockbegin,
+													 fromcontroller.back_block.curr_ptr, controller.back_block.begin_ptr);
+}
+
+template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
+inline constexpr void deque_clone_trivial_common(dequecontroltype &controller, dequecontroltype const &fromcontroller) noexcept
+{
+	constexpr ::std::size_t blockbytes{sz * block_size};
+	::fast_io::containers::details::deque_clone_trivial_impl<allocator>(controller, fromcontroller, align, sz, blockbytes);
+}
+
 } // namespace details
 
 template <typename T, typename allocator>
@@ -891,13 +943,20 @@ public:
 	using reverse_iterator = ::std::reverse_iterator<iterator>;
 	using const_reverse_iterator = ::std::reverse_iterator<const_iterator>;
 
-	::fast_io::containers::details::deque_controller<T> controller;
+private:
+	using controller_type = ::fast_io::containers::details::deque_controller<T>;
+
+public:
+	controller_type controller;
 	static inline constexpr size_type block_size{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
 	inline constexpr deque() noexcept
 		: controller{{}, {}, {}}
 	{}
 
-	inline constexpr deque(deque const &) = delete;
+	inline constexpr deque(deque const &other) noexcept(::std::is_nothrow_copy_constructible_v<value_type>)
+	{
+		this->copy_construct_impl(other.controller);
+	}
 	inline constexpr deque &operator=(deque const &) = delete;
 
 	inline constexpr deque(deque &&other) noexcept : controller(other.controller)
@@ -934,7 +993,22 @@ private:
 			}
 		}
 	};
-
+	inline constexpr void copy_construct_impl(controller_type const &fromcontroller)
+	{
+		if constexpr (::std::is_trivially_copyable_v<value_type>)
+		{
+			if (__builtin_is_constant_evaluated())
+			{
+				::fast_io::containers::details::deque_clone_trivial_common<allocator, alignof(value_type), 1u, block_size>(controller, fromcontroller);
+			}
+			else
+			{
+				::fast_io::containers::details::deque_clone_trivial_common<allocator, alignof(value_type), sizeof(value_type), block_size>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(controller)),
+																																		   *reinterpret_cast<::fast_io::containers::details::deque_controller_common const *>(__builtin_addressof(fromcontroller)));
+			}
+			return;
+		}
+	}
 	inline constexpr void default_construct_impl()
 	{
 		run_destroy des(this);
