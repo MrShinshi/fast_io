@@ -38,13 +38,11 @@
 namespace fast_io
 {
 
-template <typename Alloc = ::fast_io::native_global_allocator>
-using bitvec = ::fast_io::containers::bitvec<Alloc>;
+using bitvec = ::fast_io::containers::bitvec<::fast_io::native_global_allocator>;
 
 namespace tlc
 {
-template <typename Alloc = ::fast_io::native_thread_local_allocator>
-using bitvec = ::fast_io::containers::bitvec<Alloc>;
+using bitvec = ::fast_io::containers::bitvec<::fast_io::native_thread_local_allocator>;
 } // namespace tlc
 
 } // namespace fast_io
