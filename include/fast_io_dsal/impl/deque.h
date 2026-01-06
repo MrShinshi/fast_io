@@ -1036,7 +1036,7 @@ private:
 			{
 				auto destit{controller.front_block.controller_ptr};
 				auto pos{fromcontroller.front_block.curr_ptr - fromcontroller.front_block.begin_ptr};
-				::std::uninitialized_copy(
+				::fast_io::freestanding::uninitialized_copy(
 					fromcontroller.front_block.curr_ptr,
 					fromcontroller.front_block.end_ptr,
 					(controller.front_block.curr_ptr =
@@ -1047,7 +1047,7 @@ private:
 				for (pointer *it{front_controller_ptr + 1}, *ed{back_controller_ptr}; it != ed; ++it)
 				{
 					pointer blockptr{*it};
-					::std::uninitialized_copy_n(blockptr, block_size, *destit);
+					::fast_io::freestanding::uninitialized_copy_n(blockptr, block_size, *destit);
 					this->controller.back_block = {destit, blockptr, blockptr, blockptr + block_size};
 					++destit;
 				}
@@ -1055,8 +1055,8 @@ private:
 			}
 
 			dq_back_backup.curr_ptr =
-				::std::uninitialized_copy(lastblockbegin,
-										  fromcontroller.back_block.curr_ptr, dq_back_backup.begin_ptr);
+				::fast_io::freestanding::uninitialized_copy(lastblockbegin,
+															fromcontroller.back_block.curr_ptr, dq_back_backup.begin_ptr);
 
 			this->controller.back_block = dq_back_backup;
 			destroyer.thiscontroller = nullptr;
