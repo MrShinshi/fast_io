@@ -876,7 +876,7 @@ inline constexpr ::fast_io::containers::details::uninitialized_copy_n_for_deque_
 
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_clone_trivial_impl(dequecontroltype &controller, dequecontroltype const &fromcontroller,
-											   ::std::size_t align, ::std::size_t sz, ::std::size_t blockbytes) noexcept
+											   ::std::size_t align, ::std::size_t blockbytes) noexcept
 {
 	if (fromcontroller.front_block.curr_ptr == fromcontroller.back_block.curr_ptr)
 	{
@@ -924,7 +924,7 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_clone_trivial_common(dequecontroltype &controller, dequecontroltype const &fromcontroller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-	::fast_io::containers::details::deque_clone_trivial_impl<allocator>(controller, fromcontroller, align, sz, blockbytes);
+	::fast_io::containers::details::deque_clone_trivial_impl<allocator>(controller, fromcontroller, align, blockbytes);
 }
 
 } // namespace details
