@@ -752,8 +752,8 @@ inline constexpr void deque_clear_common(dequecontroltype &controller) noexcept
 	::fast_io::containers::details::deque_clear_common_impl<allocator>(controller, blockbytes);
 }
 
-template <typename allocator, bool zeroing, typename dequecontroltype>
-inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t blockbytes, ::std::size_t blocks_count_least) noexcept
+template <typename allocator, typename dequecontroltype>
+inline constexpr void deque_allocate_init_blocks_dezeroing_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t blockbytes, ::std::size_t blocks_count_least, bool zeroing) noexcept
 {
 	if (!blocks_count_least)
 	{
@@ -775,7 +775,7 @@ inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controll
 	using begin_ptrtype = typename dequecontroltype::replacetype *;
 	for (auto it{reserve_start}, ed{reserve_after}; it != ed; ++it)
 	{
-		if constexpr (zeroing)
+		if (zeroing)
 		{
 			::std::construct_at(it, static_cast<begin_ptrtype>(allocator::allocate_aligned_zero(align, blockbytes)));
 		}
@@ -795,6 +795,11 @@ inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controll
 		reserve_after - 1, reserve_back_block, reserve_back_block, reserve_back_block + blockbytes};
 	controller.controller_block = {
 		start_ptr, reserve_start, reserve_after, start_ptr + blocks_count};
+}
+template <typename allocator, bool zeroing, typename dequecontroltype>
+inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t blockbytes, ::std::size_t blocks_count_least) noexcept
+{
+	::fast_io::containers::details::deque_allocate_init_blocks_dezeroing_impl<allocator>(controller, align, blockbytes, blocks_count_least, zeroing);
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, bool zeroing, typename dequecontroltype>
@@ -847,9 +852,9 @@ struct uninitialized_copy_n_for_deque_in_out_result
 template <typename FromIter, typename ToIter>
 inline constexpr ::fast_io::containers::details::uninitialized_copy_n_for_deque_in_out_result<FromIter, ToIter> uninitialized_copy_n_for_deque(FromIter fromiter, ::std::size_t count, ToIter toiter)
 {
+#if 0
 	using fromvaluet = ::std::iter_value_t<FromIter>;
 	using tovaluet = ::std::iter_value_t<ToIter>;
-#if 0
 	if constexpr(::std::is_trivially_copyable_v<FromIter>&&
 		::std::is_trivially_copyable_v<ToIter>)
 	{
