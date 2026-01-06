@@ -1079,17 +1079,17 @@ private:
 		}
 		else
 		{
-			::std::uninitialized_default_construct(controller.front_block.curr_ptr, controller.front_block.end_ptr);
+			::fast_io::freestanding::uninitialized_default_construct(controller.front_block.curr_ptr, controller.front_block.end_ptr);
 			this->controller.back_block.curr_ptr = this->controller.back_block.end_ptr;
 			for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
 			{
 				T *blockptr{*it};
-				::std::uninitialized_default_construct(blockptr, blockptr + block_size);
+				::fast_io::freestanding::uninitialized_default_construct(blockptr, blockptr + block_size);
 				this->controller.back_block = {it, blockptr, blockptr + block_size, blockptr + block_size};
 			}
 			lastblockbegin = dq_back_backup.begin_ptr;
 		}
-		::std::uninitialized_default_construct(lastblockbegin, dq_back_backup.curr_ptr);
+		::fast_io::freestanding::uninitialized_default_construct(lastblockbegin, dq_back_backup.curr_ptr);
 		this->controller.back_block = dq_back_backup;
 		des.thisdeq = nullptr;
 	}
