@@ -1091,7 +1091,7 @@ private:
 		}
 		::fast_io::freestanding::uninitialized_default_construct(lastblockbegin, dq_back_backup.curr_ptr);
 		this->controller.back_block = dq_back_backup;
-		des.thisdeq = nullptr;
+		des.thiscontroller = nullptr;
 	}
 
 public:
@@ -1185,7 +1185,7 @@ private:
 				this->push_back(*first);
 			}
 		}
-		des.thisdeq = nullptr;
+		des.thiscontroller = nullptr;
 	}
 
 	template <bool iszeroconstr>
