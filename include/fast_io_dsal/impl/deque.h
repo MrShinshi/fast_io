@@ -970,7 +970,7 @@ public:
 		{
 			return *this;
 		}
-		this->destroy();
+		destroy_deque_controller(this->controller);
 		this->controller = other.controller;
 		other.controller = {{}, {}, {}};
 		return *this;
@@ -979,18 +979,18 @@ public:
 private:
 	struct run_destroy
 	{
-		deque *thisdeq{};
+		controller_type *thiscontroller{};
 		inline constexpr run_destroy() noexcept = default;
-		inline explicit constexpr run_destroy(deque *p) noexcept
-			: thisdeq(p)
+		inline explicit constexpr run_destroy(controller_type *p) noexcept
+			: thiscontroller(p)
 		{}
 		inline run_destroy(run_destroy const &) = delete;
 		inline run_destroy &operator=(run_destroy const &) = delete;
 		inline constexpr ~run_destroy()
 		{
-			if (thisdeq)
+			if (thiscontroller)
 			{
-				thisdeq->destroy();
+				destroy_deque_controller(*thiscontroller);
 			}
 		}
 	};
@@ -1009,10 +1009,62 @@ private:
 			}
 			return;
 		}
+		else
+		{
+			if (fromcontroller.front_block.curr_ptr == fromcontroller.back_block.curr_ptr)
+			{
+				this->controller = {{}, {}, {}};
+				return;
+			}
+
+			auto front_controller_ptr{fromcontroller.front_block.controller_ptr};
+			auto back_controller_ptr{fromcontroller.back_block.controller_ptr};
+			::std::size_t blocks_required{static_cast<::std::size_t>(back_controller_ptr -
+																	 front_controller_ptr + 1)};
+			constexpr ::std::size_t block_bytes{block_size * sizeof(value_type)};
+			::fast_io::containers::details::deque_allocate_init_blocks_dezeroing_impl<allocator>(controller, alignof(value_type), block_bytes, blocks_required, false);
+
+			run_destroy destroyer(__builtin_addressof(this->controller));
+			auto dq_back_backup{this->controller.back_block};
+			this->controller.back_block = this->controller.front_block;
+			pointer lastblockbegin;
+			if (front_controller_ptr == back_controller_ptr)
+			{
+				lastblockbegin = controller.front_block.curr_ptr;
+			}
+			else
+			{
+				auto destit{controller.front_block.controller_ptr};
+				auto pos{fromcontroller.front_block.curr_ptr - fromcontroller.front_block.begin_ptr};
+				::std::uninitialized_copy(
+					fromcontroller.front_block.curr_ptr,
+					fromcontroller.front_block.end_ptr,
+					(controller.front_block.curr_ptr =
+						 pos + controller.front_block.begin_ptr));
+				this->controller.back_block.curr_ptr = controller.front_block.end_ptr =
+					controller.front_block.begin_ptr + block_size;
+				++destit;
+				for (pointer *it{front_controller_ptr + 1}, *ed{back_controller_ptr}; it != ed; ++it)
+				{
+					pointer blockptr{*it};
+					::std::uninitialized_copy_n(blockptr, block_size, *destit);
+					this->controller.back_block = {destit, blockptr, blockptr, blockptr + block_size};
+					++destit;
+				}
+				lastblockbegin = fromcontroller.back_block.begin_ptr;
+			}
+
+			dq_back_backup.curr_ptr =
+				::std::uninitialized_copy(lastblockbegin,
+										  fromcontroller.back_block.curr_ptr, dq_back_backup.begin_ptr);
+
+			this->controller.back_block = dq_back_backup;
+			destroyer.thiscontroller = nullptr;
+		}
 	}
 	inline constexpr void default_construct_impl()
 	{
-		run_destroy des(this);
+		run_destroy des(__builtin_addressof(this->controller));
 
 		auto dq_back_backup{controller.back_block};
 		controller.back_block = controller.front_block;
@@ -1092,7 +1144,7 @@ private:
 			controller = {{}, {}, {}};
 			return;
 		}
-		run_destroy des(this);
+		run_destroy des(__builtin_addressof(this->controller));
 		if constexpr (::std::sized_sentinel_for<Sentinel, Iter>)
 		{
 			auto const dist{::std::ranges::distance(first, last)};
@@ -1148,7 +1200,7 @@ private:
 			::fast_io::containers::details::deque_init_space_common<allocator, alignof(value_type), sizeof(value_type), block_size, iszeroconstr>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(controller)), n);
 		}
 	}
-	inline constexpr void destroy_all_elements() noexcept
+	inline static constexpr void destroy_all_elements(controller_type &controller) noexcept
 	{
 		auto front_controller_ptr{controller.front_block.controller_ptr};
 		auto back_controller_ptr{controller.back_block.controller_ptr};
@@ -1170,11 +1222,11 @@ private:
 		::std::destroy(lastblockbegin, controller.back_block.curr_ptr);
 	}
 
-	inline constexpr void destroy() noexcept
+	inline static constexpr void destroy_deque_controller(controller_type &controller) noexcept
 	{
 		if constexpr (!::std::is_trivially_destructible_v<value_type>)
 		{
-			this->destroy_all_elements();
+			destroy_all_elements(controller);
 		}
 		::fast_io::containers::details::deque_destroy_trivial_common<allocator, alignof(value_type), sizeof(value_type)>(controller.controller_block);
 	}
@@ -1229,7 +1281,7 @@ public:
 	{
 		if constexpr (!::std::is_trivially_destructible_v<value_type>)
 		{
-			this->destroy_all_elements();
+			destroy_all_elements(this->controller);
 		}
 		if (__builtin_is_constant_evaluated())
 		{
@@ -1593,13 +1645,13 @@ public:
 
 	inline constexpr void clear_destroy() noexcept
 	{
-		this->destroy();
+		destroy_deque_controller(this->controller);
 		this->controller = {{}, {}, {}};
 	}
 
 	inline constexpr ~deque()
 	{
-		this->destroy();
+		destroy_deque_controller(this->controller);
 	}
 };
 
