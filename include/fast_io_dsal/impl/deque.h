@@ -958,7 +958,18 @@ public:
 	{
 		this->copy_construct_impl(other.controller);
 	}
-	inline constexpr deque &operator=(deque const &) = delete;
+	inline constexpr deque &operator=(deque const &other) noexcept(::std::is_nothrow_copy_constructible_v<value_type>)
+	{
+		if (__builtin_addressof(other) == this)
+		{
+			return *this;
+		}
+		deque temp(other);
+		destroy_deque_controller(this->controller);
+		this->controller = temp.controller;
+		temp.controller = {{}, {}, {}};
+		return *this;
+	}
 
 	inline constexpr deque(deque &&other) noexcept : controller(other.controller)
 	{
