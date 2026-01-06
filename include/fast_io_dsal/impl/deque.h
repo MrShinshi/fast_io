@@ -475,8 +475,7 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 	auto &front_block{controller.front_block};
 	auto &back_block{controller.back_block};
 
-	constexpr bool isvoidplaceholder{::std::same_as<typename dequecontroltype::replacetype, void>};
-	using begin_ptrtype = ::std::conditional_t<isvoidplaceholder, ::std::byte *, typename dequecontroltype::replacetype *>;
+	using begin_ptrtype = typename dequecontroltype::replacetype *;
 
 	auto begin_ptr{static_cast<begin_ptrtype>(allocator::allocate_aligned(align, bytes))};
 
@@ -736,9 +735,7 @@ inline constexpr void deque_clear_common_impl(dequecontroltype &controller, ::st
 		static_cast<::std::size_t>(reserved_blocks_count >> 1u)};
 	auto reserved_pivot{start_reserved_ptr + half_reserved_blocks_count};
 	using replacetype = typename dequecontroltype::replacetype;
-	constexpr bool isvoidplaceholder = std::same_as<replacetype, void>;
-	using begin_ptrtype =
-		std::conditional_t<isvoidplaceholder, std::byte *, replacetype *>;
+	using begin_ptrtype = replacetype *;
 	auto begin_ptr{static_cast<begin_ptrtype>(*reserved_pivot)};
 	auto end_ptr{begin_ptr + blockbytes};
 	auto mid_ptr{begin_ptr + static_cast<::std::size_t>(blockbytes >> 1u)};
@@ -780,22 +777,21 @@ inline constexpr void deque_allocate_init_blocks_impl(dequecontroltype &controll
 	::std::size_t const half_blocks_count_least{blocks_count_least >> 1u};
 	::std::size_t const offset{half_blocks_count_least - half_blocks_count};
 	auto reserve_start{start_ptr + offset}, reserve_after{reserve_start + blocks_count_least};
+	using begin_ptrtype = typename dequecontroltype::replacetype *;
 	for (auto it{reserve_start}, ed{reserve_after}; it != ed; ++it)
 	{
 		if constexpr (zeroing)
 		{
-			::std::construct_at(it, allocator::allocate_aligned_zero(align, blockbytes));
+			::std::construct_at(it, static_cast<begin_ptrtype>(allocator::allocate_aligned_zero(align, blockbytes)));
 		}
 		else
 		{
-			::std::construct_at(it, allocator::allocate_aligned(align, blockbytes));
+			::std::construct_at(it, static_cast<begin_ptrtype>(allocator::allocate_aligned(align, blockbytes)));
 		}
 	}
 	::std::construct_at(reserve_after, nullptr);
 	using replacetype = typename dequecontroltype::replacetype;
-	constexpr bool isvoidplaceholder = std::same_as<replacetype, void>;
-	using begin_ptrtype =
-		std::conditional_t<isvoidplaceholder, std::byte *, replacetype *>;
+	using begin_ptrtype = replacetype *;
 	begin_ptrtype reserve_start_block{static_cast<begin_ptrtype>(*reserve_start)};
 	controller.front_block = {
 		reserve_start, reserve_start_block, reserve_start_block, reserve_start_block + blockbytes};
@@ -824,12 +820,10 @@ inline constexpr void deque_init_space_common(dequecontroltype &controller, ::st
 	::std::size_t const nmodszhalfbytes{sz * static_cast<::std::size_t>(nmodsz >> 1u)};
 	::fast_io::containers::details::deque_allocate_init_blocks_impl<allocator, zeroing>(controller, align, blockbytes, counts);
 	using replacetype = typename dequecontroltype::replacetype;
-	constexpr bool isvoidplaceholder = std::same_as<replacetype, void>;
-	using begin_ptrtype =
-		std::conditional_t<isvoidplaceholder, std::byte *, replacetype *>;
+	using begin_ptrtype = replacetype *;
 	auto &front_curr_ptr{controller.front_block.curr_ptr};
 	front_curr_ptr = (static_cast<begin_ptrtype>(front_curr_ptr) + nmodszhalfbytes);
-	auto &back_curr_ptr{controller.back_curr_ptr.curr_ptr};
+	auto &back_curr_ptr{controller.back_block.curr_ptr};
 	back_curr_ptr = (static_cast<begin_ptrtype>(back_curr_ptr) - nmodszhalfbytes);
 }
 
@@ -981,7 +975,7 @@ public:
 														  ::std::is_nothrow_default_constructible_v<value_type>)
 	{
 		constexpr bool iszeroconstr{::fast_io::freestanding::is_zero_default_constructible_v<value_type>};
-		this->init_blocks_common<iszeroconstr>();
+		this->init_blocks_common<iszeroconstr>(n);
 		if constexpr (!iszeroconstr)
 		{
 			this->default_construct_impl();
@@ -993,15 +987,15 @@ public:
 	{
 		if constexpr (::std::is_trivially_default_constructible_v<value_type>)
 		{
-			this->init_blocks_common<false>();
+			this->init_blocks_common<false>(n);
 		}
 		else if constexpr (::fast_io::freestanding::is_zero_default_constructible_v<value_type>)
 		{
-			this->init_blocks_common<true>();
+			this->init_blocks_common<true>(n);
 		}
 		else
 		{
-			this->init_blocks_common<false>();
+			this->init_blocks_common<false>(n);
 			this->default_construct_impl();
 		}
 	}
@@ -1072,11 +1066,11 @@ private:
 	{
 		if (__builtin_is_constant_evaluated())
 		{
-			::fast_io::containers::details::deque_allocate_init_blocks_impl<allocator, alignof(value_type), 1u, block_size, iszeroconstr>(controller, n);
+			::fast_io::containers::details::deque_init_space_common<allocator, alignof(value_type), 1u, block_size, iszeroconstr>(controller, n);
 		}
 		else
 		{
-			::fast_io::containers::details::deque_allocate_init_blocks_impl<allocator, alignof(value_type), sizeof(value_type), block_size, iszeroconstr>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(controller), n));
+			::fast_io::containers::details::deque_init_space_common<allocator, alignof(value_type), sizeof(value_type), block_size, iszeroconstr>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(controller)), n);
 		}
 	}
 	inline constexpr void destroy_all_elements() noexcept
