@@ -1,5 +1,6 @@
 #include <fast_io.h>
 #include <fast_io_dsal/bitvec.h>
+#include <fast_io_dsal/vector.h>
 
 inline void test_bitvec_basic()
 {
@@ -521,6 +522,171 @@ inline void test_bitvec_all_operations()
 	::fast_io::io::print("bitvec _all operations test finished\n");
 }
 
+inline void test_bitvec_bitops()
+{
+	::fast_io::io::perr("=== bitvec bit operations test ===\n");
+
+	::fast_io::bitvec a;
+	::fast_io::bitvec b;
+
+	for (::std::size_t i{}; i != 256u; ++i)
+	{
+		a.push_back((i & 1u) != 0u); // 010101...
+		b.push_back((i & 3u) == 2u); // 0010001000...
+	}
+
+	// --- operator& ---
+	::fast_io::bitvec c = a & b;
+	for (::std::size_t i{}; i != 256u; ++i)
+	{
+		bool expected = ((i & 1u) != 0u) && ((i & 3u) == 2u);
+		if (c.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: operator& mismatch at index ", i);
+		}
+	}
+
+	// --- operator| ---
+	::fast_io::bitvec d = a | b;
+	for (::std::size_t i{}; i != 256u; ++i)
+	{
+		bool expected = ((i & 1u) != 0u) || ((i & 3u) == 2u);
+		if (d.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: operator| mismatch at index ", i);
+		}
+	}
+
+	// --- operator^ ---
+	::fast_io::bitvec e = a ^ b;
+	for (::std::size_t i{}; i != 256u; ++i)
+	{
+		bool expected = ((i & 1u) != 0u) ^ ((i & 3u) == 2u);
+		if (e.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: operator^ mismatch at index ", i);
+		}
+	}
+
+	// --- shifts ---
+	::fast_io::bitvec f = a << 3;
+	for (::std::size_t i{}; i + 3 < 256u; ++i)
+	{
+		if (f.test(i + 3) != a.test(i))
+		{
+			::fast_io::io::panicln("ERROR: operator<< mismatch at index ", i);
+		}
+	}
+
+	::fast_io::bitvec g = a >> 5;
+	for (::std::size_t i{}; i + 5 < 256u; ++i)
+	{
+		if (g.test(i) != a.test(i + 5))
+		{
+			::fast_io::io::panicln("ERROR: operator>> mismatch at index ", i);
+		}
+	}
+
+	// --- rotations (only if assign ops exist) ---
+	{
+		::fast_io::bitvec r1 = bitvec_rotl(a, 7);
+		::fast_io::bitvec r2 = bitvec_rotr(a, 7);
+
+		for (::std::size_t i{}; i != 256u; ++i)
+		{
+			if (r1.test(i) != a.test((i + 256u - 7u) % 256u))
+			{
+				::fast_io::io::panicln("ERROR: rotl mismatch at index ", i);
+			}
+
+			if (r2.test(i) != a.test((i + 7u) % 256u))
+			{
+				::fast_io::io::panicln("ERROR: rotr mismatch at index ", i);
+			}
+		}
+	}
+
+	// --- bit_floor / bit_ceil ---
+	{
+		::fast_io::bitvec single;
+		single.push_back(false);
+		single.push_back(false);
+		single.push_back(true); // 100b
+
+		::fast_io::bitvec bf = bitvec_bit_floor(single);
+		::fast_io::bitvec bc = bitvec_bit_ceil(single);
+
+		if (!bf.test(2) || bf.test(1) || bf.test(0))
+		{
+			::fast_io::io::panic("ERROR: bit_floor incorrect\n");
+		}
+
+		if (!bc.test(2) || bc.test(1) || bc.test(0))
+		{
+			::fast_io::io::panic("ERROR: bit_ceil incorrect\n");
+		}
+	}
+
+	::fast_io::io::print("bitvec bit operations test finished\n");
+}
+
+
+inline void test_bitvec_init_list_and_range()
+{
+	::fast_io::io::perr("=== bitvec initializer_list + range constructor test ===\n");
+
+	using ::fast_io::bitvec;
+	using ::fast_io::vector;
+
+	// --- initializer_list test ---
+	bitvec ilv{true, false, true, true, false, false, true};
+
+	if (ilv.size() != 7)
+	{
+		::fast_io::io::panic("ERROR: initializer_list size mismatch\n");
+	}
+
+	bool expected_il[7]{1, 0, 1, 1, 0, 0, 1};
+	for (::std::size_t i{}; i != 7; ++i)
+	{
+		if (ilv.test(i) != expected_il[i])
+		{
+			::fast_io::io::panicln("ERROR: initializer_list mismatch at index ", i);
+		}
+	}
+
+	// --- range constructor test ---
+	vector<int> vec;
+	vec.reserve(10);
+	vec.push_back(1);
+	vec.push_back(0);
+	vec.push_back(1);
+	vec.push_back(1);
+	vec.push_back(0);
+	vec.push_back(0);
+	vec.push_back(1);
+	vec.push_back(1);
+	vec.push_back(0);
+	vec.push_back(1);
+
+	bitvec rv(::fast_io::freestanding::from_range, vec);
+
+	if (rv.size() != vec.size())
+	{
+		::fast_io::io::panic("ERROR: range constructor size mismatch\n");
+	}
+
+	for (::std::size_t i{}; i != vec.size(); ++i)
+	{
+		if (rv.test(i) != static_cast<bool>(vec[i]))
+		{
+			::fast_io::io::panicln("ERROR: range constructor mismatch at index ", i);
+		}
+	}
+
+	::fast_io::io::print("bitvec initializer_list + range constructor test finished\n");
+}
+
 int main()
 {
 	test_bitvec_basic();
@@ -533,6 +699,8 @@ int main()
 	test_bitvec_flip();
 	test_bitvec_reserve_and_push_back_unchecked();
 	test_bitvec_all_operations();
+	test_bitvec_init_list_and_range();
+	test_bitvec_bitops();
 
 	::fast_io::io::print("All bitvec tests finished\n");
 }
