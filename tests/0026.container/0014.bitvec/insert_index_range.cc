@@ -12,12 +12,7 @@ int main()
 	}
 
 	using namespace ::fast_io::iomnp;
-	print("Initial bitvec:\n");
-	for (std::size_t i{}, n{bv.size()}; i != n; ++i)
-	{
-		print(bv.test(i));
-	}
-	print("\n");
+	print("Initial bitvec:\n", bv,"\nExpected:\n01010101\n\n");
 
 	// Range to insert
 	bool arr[4]{1, 0, 1, 1};
@@ -25,12 +20,8 @@ int main()
 	// Insert at index 3
 	bv.insert_range_index(3, arr);
 
-	print("After insert_range_index(3, {1,0,1,1}):");
-	for (std::size_t i{}, n{bv.size()}; i != n; ++i)
-	{
-		print(bv.test(i));
-	}
-	print("\nExpected:01010110101\n");
+	print("After insert_range_index(3, {1,0,1,1}):\n", bv,
+		  "\nExpected:\n01010110101\n");
 
 	// Expected result:
 	// Initial: 0 1 0 1 0 1 0 1

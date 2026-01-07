@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 namespace fast_io
 {
@@ -692,7 +692,7 @@ public:
 	{
 		return this->imp.begin_ptr;
 	}
-	constexpr size_type size() noexcept
+	constexpr size_type size() const noexcept
 	{
 		return this->imp.curr_pos;
 	}
@@ -702,7 +702,7 @@ public:
 		auto [byte_index, bit_index] = ::fast_io::details::bitvec_split_bits<underlying_digits>(bitpos);
 		return byte_index + (bit_index != 0u);
 	}
-	constexpr size_type capacity() noexcept
+	constexpr size_type capacity() const noexcept
 	{
 		return this->imp.end_pos;
 	}
@@ -2526,6 +2526,108 @@ constexpr ::fast_io::containers::bitvec<allocator> bitvec_bit_ceil(::fast_io::co
 	return v;
 }
 
+} // namespace containers
+
+namespace details
+{
+template <::std::integral chtype, typename underlying>
+inline constexpr chtype *pr_rsv_bin_full(chtype *outit, underlying const *first, underlying const *last) noexcept
+{
+#if 1
+	constexpr bool endian_available{
+		::std::endian::little == ::std::endian::native
+#if 0
+//i am not sure whether big endian would work, fallback to default
+	|| ::std::endian::big == ::std::endian::native
+#endif
+	};
+	if constexpr (endian_available && ::std::numeric_limits<char unsigned>::digits == 8 &&
+				  ::std::numeric_limits<::std::uint_least32_t>::digits == 32 &&
+				  ::std::numeric_limits<::std::uint_least64_t>::digits == 64 &&
+				  (sizeof(chtype) == 1) &&
+				  ::std::numeric_limits<underlying>::digits == 8 &&
+				  64 <= ::std::numeric_limits<::std::size_t>::digits)
+	{
+		constexpr bool ebcdic{::fast_io::details::is_ebcdic<chtype>};
+		for (; first != last; ++first)
+		{
+			::std::uint_least8_t b{*first};
+			::std::uint_least64_t x{b};
+
+			x = (((x & 0b01010101) * 0x02040810204081LL) | ((x & 0b10101010) * 0x02040810204081LL)) & 0x0101010101010101LL;
+			// Step 3: convert 0/1 → '0'/'1'
+			if constexpr (ebcdic)
+			{
+				x += 0xF0F0F0F0F0F0F0F0ULL;
+			}
+			else
+			{
+				x += 0x3030303030303030ULL;
+			}
+
+			// Write 8 bytes
+			::fast_io::freestanding::my_memcpy(outit, __builtin_addressof(x), 8);
+			outit += 8;
+		}
+		return outit;
+	}
+	else
+#endif
+	{
+		constexpr ::std::uint_fast8_t digits{::std::numeric_limits<underlying>::digits};
+		using unsignedchartype = ::std::make_unsigned_t<chtype>;
+		for (; first != last; ++first)
+		{
+			auto e{*first};
+			for (::std::uint_fast8_t i{}; i != digits; ++i)
+			{
+				*outit = static_cast<unsignedchartype>(static_cast<unsignedchartype>(e & 1u) +
+													   static_cast<unsignedchartype>(::fast_io::char_literal_v<u8'0', chtype>));
+				e >>= 1u;
+				++outit;
+			}
+		}
+		return outit;
+	}
+}
+
+template <::std::integral chtype, typename allocator>
+inline constexpr chtype *pr_rsv_bitvec(chtype *outit, ::fast_io::containers::bitvec<allocator> const &bv) noexcept
+{
+	constexpr auto underlying_digits{::fast_io::containers::bitvec<allocator>::underlying_digits};
+	auto [full_units, rem_bits] = ::fast_io::details::bitvec_split_bits<underlying_digits>(bv.imp.curr_pos);
+	auto begin_ptr{bv.imp.begin_ptr};
+	auto end_ptr{begin_ptr + full_units};
+	outit = ::fast_io::details::pr_rsv_bin_full(outit, begin_ptr, end_ptr);
+	if (rem_bits)
+	{
+		auto e{*end_ptr};
+		using unsignedchartype = ::std::make_unsigned_t<chtype>;
+		for (::std::size_t i{}; i != rem_bits; ++i)
+		{
+			*outit = static_cast<unsignedchartype>(static_cast<unsignedchartype>(e & 1u) +
+												   static_cast<unsignedchartype>(::fast_io::char_literal_v<u8'0', chtype>));
+			e >>= 1u;
+			++outit;
+		}
+	}
+	return outit;
+}
+} // namespace details
+
+namespace containers
+{
+template <::std::integral chtype, typename allocator>
+inline constexpr ::std::size_t print_reserve_size(::fast_io::io_reserve_type_t<chtype, ::fast_io::containers::bitvec<allocator>>, ::fast_io::containers::bitvec<allocator> const &bv) noexcept
+{
+	return bv.size();
+}
+
+template <::std::integral chtype, typename allocator>
+inline constexpr chtype *print_reserve_define(::fast_io::io_reserve_type_t<chtype, ::fast_io::containers::bitvec<allocator>>, chtype *it, ::fast_io::containers::bitvec<allocator> const &bv) noexcept
+{
+	return ::fast_io::details::pr_rsv_bitvec(it, bv);
+}
 } // namespace containers
 
 } // namespace fast_io
