@@ -177,25 +177,18 @@ private:
 		}
 		this->grow_to_new_capacity(toallocate);
 	}
-	inline static constexpr ::fast_io::details::bitvec_rep allocate_new(size_type n) noexcept
+	inline static constexpr ::fast_io::details::bitvec_rep allocate_new_bytes(size_type to_allocate_bytes) noexcept
 	{
-		size_type to_allocate_bytes{n};
-		if constexpr (underlying_digits == 8)
-		{
-			to_allocate_bytes = (n >> 3u) + ((n & 3u) != 0);
-		}
-		else
-		{
-			size_type const ndivdigits{n / underlying_digits};
-			size_type const nmoddigits{n % underlying_digits};
-			to_allocate_bytes = ndivdigits + (nmoddigits != 0);
-		}
 		constexpr ::std::size_t mxbytes{max_size_bytes()};
+		if (to_allocate_bytes == 0)
+		{
+			return {};
+		}
 		if (mxbytes < to_allocate_bytes)
 		{
 			::fast_io::fast_terminate();
 		}
-		auto [new_begin_ptr, new_capacity] = typed_allocator::allocate_zero_at_least(n);
+		auto [new_begin_ptr, new_capacity] = typed_allocator::allocate_zero_at_least(to_allocate_bytes);
 		if (mxbytes < new_capacity)
 		{
 			new_capacity = mxbytes;
@@ -209,26 +202,54 @@ private:
 			new_capacity *= underlying_digits;
 		}
 
-		return {new_begin_ptr, n, new_capacity};
+		return {new_begin_ptr, 0, new_capacity};
 	}
-	inline static constexpr ::fast_io::details::bitvec_rep clone_imp(::fast_io::details::bitvec_rep const &other) noexcept
+	inline static constexpr ::fast_io::details::bitvec_rep allocate_new_bits(size_type n) noexcept
 	{
-		auto newrep{allocate_new(other.curr_pos)};
-		size_type n{other.curr_pos};
-		size_type to_copy_bytes;
-		if constexpr (underlying_digits == 8)
+		if (n == 0)
 		{
-			to_copy_bytes = (n >> 3u) + ((n & 3u) != 0);
+			return {};
 		}
-		else
+		auto [byte_index, bit_index] = ::fast_io::details::bitvec_split_bits<underlying_digits>(n);
+		size_type to_new_bytes{byte_index + (bit_index != 0u)};
+		auto rep = allocate_new_bytes(to_new_bytes);
+		rep.curr_pos = n;
+		return rep;
+	}
+	inline static constexpr ::fast_io::details::bitvec_rep
+	clone_imp(::fast_io::details::bitvec_rep const &other) noexcept
+	{
+		using U = underlying_type;
+		size_type const n{other.curr_pos};
+		if (n == 0)
 		{
-			size_type const ndivdigits{n / underlying_digits};
-			size_type const nmoddigits{n % underlying_digits};
-			to_copy_bytes = ndivdigits + (nmoddigits != 0);
+			return {};
 		}
-		::fast_io::freestanding::non_overlapped_copy_n(other.begin_ptr, to_copy_bytes, newrep.begin_ptr);
+
+		auto [full_units, rem_bits] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(n);
+
+		// number of underlying units we need to copy
+		size_type to_copy_units{full_units + (rem_bits != 0u)};
+
+		auto newrep{allocate_new_bytes(to_copy_units)};
+
+		// copy all full units
+		auto it{::fast_io::freestanding::non_overlapped_copy_n(
+			other.begin_ptr, full_units, newrep.begin_ptr)};
+
+		// handle partial last unit, if any
+		if (rem_bits != 0u)
+		{
+			U last = other.begin_ptr[full_units];
+			U mask = (U{1} << rem_bits) - 1;
+			*it = static_cast<U>(last & mask);
+		}
+
+		newrep.curr_pos = n;
 		return newrep;
 	}
+
 	inline constexpr void destroy_bitvec() noexcept
 	{
 		auto begin_ptr{imp.begin_ptr};
@@ -240,7 +261,7 @@ private:
 	}
 
 public:
-	inline constexpr bitvec(size_type n) noexcept : imp{allocate_new(n)}
+	inline constexpr bitvec(size_type n) noexcept : imp{allocate_new_bits(n)}
 	{
 	}
 
@@ -659,7 +680,10 @@ public:
 	{
 		this->destroy_bitvec();
 	}
-
+	constexpr void swap(bitvec &other) noexcept
+	{
+		::std::swap(this->imp, other.imp);
+	}
 	constexpr underlying_pointer underlying_data() noexcept
 	{
 		return this->imp.begin_ptr;
@@ -1249,35 +1273,40 @@ public:
 
 	constexpr bool is_all_zero() const noexcept
 	{
-		auto *p = this->imp.begin_ptr;
-		size_type bits = this->imp.curr_pos;
+		size_type bits{this->imp.curr_pos};
 
 		if (bits == 0)
 		{
 			return true;
 		}
 
-		auto [full_bytes, rem] =
+		auto [full_units, rem] =
 			::fast_io::details::bitvec_split_bits<underlying_digits>(bits);
 
-		// Check full bytes
-		auto *it = p;
-		auto *end_full = p + full_bytes;
+		// --------------------------------------------------------
+		// Constexpr fallback: manual loop
+		// --------------------------------------------------------
+		auto *p{this->imp.begin_ptr};
+		auto it{p};
+		auto end{p + full_units};
 
-		for (; it != end_full; ++it)
+		for (; it != end; ++it)
 		{
-			if (*it != 0)
+			if (*it)
 			{
 				return false;
 			}
 		}
 
-		// Check partial byte
-		if (rem != 0)
+
+		// ------------------------------------------------------------
+		// Check partial word
+		// ------------------------------------------------------------
+		if (rem)
 		{
 			using U = underlying_type;
-			U mask = static_cast<U>((1u << rem) - 1u);
-			if ((p[full_bytes] & mask) != 0)
+			U mask = (U{1} << rem) - 1;
+			if ((*it & mask))
 			{
 				return false;
 			}
@@ -1285,6 +1314,7 @@ public:
 
 		return true;
 	}
+
 
 	constexpr bitvec &bit_ceil_assign() noexcept
 	{
@@ -1996,6 +2026,314 @@ public:
 			guard.self = nullptr;
 		}
 	}
+
+	inline constexpr size_type insert_index(size_type idx, bool value) noexcept
+	{
+		if (this->imp.curr_pos < idx)
+		{
+			::fast_io::fast_terminate();
+		}
+		if (this->imp.curr_pos == this->imp.end_pos)
+		{
+			this->grow_twice();
+		}
+		using U = underlying_type;
+		U *p = this->imp.begin_ptr;
+
+		size_type old_size = this->imp.curr_pos;
+		size_type new_size = old_size + 1;
+
+		// Split insertion index
+		auto [idx_full, idx_rem] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(idx);
+
+		// Split old size
+		auto [old_full, old_rem] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(old_size);
+
+		// ------------------------------------------------------------
+		// Step 1: shift insertion word using addc
+		// ------------------------------------------------------------
+		U w = p[idx_full];
+
+		U low_mask = (idx_rem == 0) ? U{0} : ((U{1} << idx_rem) - 1);
+		U high_mask = ~low_mask;
+
+		U low = w & low_mask;
+		U high = w & high_mask;
+
+		// Extract initial carry from LSB of high
+		bool carry = (high & U{1}) != 0;
+
+		// Shift high right by 1 with carry using addc
+		high = ::fast_io::intrinsics::addc(high, high, carry, carry);
+
+		// Combine low + shifted high
+		p[idx_full] = low | high;
+
+		// Insert the new bit
+		if (value)
+		{
+			p[idx_full] |= (U{1} << idx_rem);
+		}
+		else
+		{
+			p[idx_full] &= ~(U{1} << idx_rem);
+		}
+
+		// ------------------------------------------------------------
+		// Step 2: propagate carry through subsequent full words
+		// ------------------------------------------------------------
+		for (size_type widx = idx_full + 1; widx < old_full; ++widx)
+		{
+			U cur = p[widx];
+			cur = ::fast_io::intrinsics::addc(cur, cur, carry, carry);
+			p[widx] = cur;
+		}
+
+		// ------------------------------------------------------------
+		// Step 3: handle the final partial word (if any)
+		// ------------------------------------------------------------
+		if (old_rem != 0)
+		{
+			U cur = p[old_full];
+			cur = ::fast_io::intrinsics::addc(cur, cur, carry, carry);
+			p[old_full] = cur;
+		}
+		else
+		{
+			// No partial word existed; we need to create one
+			p[old_full] = carry;
+		}
+
+		this->imp.curr_pos = new_size;
+
+		return idx;
+	}
+
+	inline constexpr size_type insert_index(size_type idx, size_type count, bool value) noexcept
+	{
+		using U = underlying_type;
+
+		// ------------------------------------------------------------
+		// 1. Bounds check FIRST
+		// ------------------------------------------------------------
+		if (this->imp.curr_pos < idx)
+		{
+			::fast_io::fast_terminate();
+		}
+
+		// ------------------------------------------------------------
+		// 2. Now check count == 0
+		// ------------------------------------------------------------
+		if (count == 0)
+		{
+			return idx;
+		}
+
+		// ------------------------------------------------------------
+		// 3. Overflow‑checked addition using addc
+		// ------------------------------------------------------------
+		size_type old_size = this->imp.curr_pos;
+
+		bool carry{};
+		size_type new_size = ::fast_io::intrinsics::addc(old_size, count, false, carry);
+		if (carry)
+		{
+			::fast_io::fast_terminate(); // overflow
+		}
+
+		// ------------------------------------------------------------
+		// 4. Ensure capacity BEFORE shifting bits
+		// ------------------------------------------------------------
+		this->reserve(new_size);
+
+		// refresh pointer after possible reallocation
+		U *p = this->imp.begin_ptr;
+
+		// ------------------------------------------------------------
+		// 5. Split positions using bitvec_split_bits
+		// ------------------------------------------------------------
+		auto [idx_full, idx_rem] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(idx);
+
+		auto [old_full, old_rem] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(old_size);
+
+		auto [new_full, new_rem] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(new_size);
+
+		size_type old_words = old_full + (old_rem != 0);
+		size_type new_words = new_full + (new_rem != 0);
+
+		// ------------------------------------------------------------
+		// 6. Split count into whole‑word and bit shifts
+		// ------------------------------------------------------------
+		auto [word_shift, bit_shift] =
+			::fast_io::details::bitvec_split_bits<underlying_digits>(count);
+
+		// ------------------------------------------------------------
+		// 7. Shift by whole words
+		// ------------------------------------------------------------
+		if (word_shift != 0)
+		{
+			for (size_type i = old_words; i-- > idx_full;)
+			{
+				p[i + word_shift] = p[i];
+			}
+
+			for (size_type i = 0; i < word_shift; ++i)
+			{
+				p[idx_full + i] = U{};
+			}
+		}
+
+		// ------------------------------------------------------------
+		// 8. Shift by remaining bits using shiftright
+		// ------------------------------------------------------------
+		if (bit_shift != 0)
+		{
+			for (size_type i = new_words; i-- > idx_full;)
+			{
+				U low = p[i];
+				U high = (i == 0) ? U{} : p[i - 1];
+
+				p[i] = ::fast_io::intrinsics::shiftright<U>(
+					low, high, static_cast<unsigned>(bit_shift));
+			}
+		}
+
+		// ------------------------------------------------------------
+		// 9. Fill inserted region [idx, idx+count) with value
+		// ------------------------------------------------------------
+		if (value)
+		{
+			size_type first = idx;
+			size_type last = idx + count;
+
+			auto [f_full, f_rem] =
+				::fast_io::details::bitvec_split_bits<underlying_digits>(first);
+			auto [l_full, l_rem] =
+				::fast_io::details::bitvec_split_bits<underlying_digits>(last);
+
+			if (f_full == l_full)
+			{
+				// All inside one word
+				U mask = ((U{1} << (l_rem - f_rem)) - 1) << f_rem;
+				p[f_full] |= mask;
+			}
+			else
+			{
+				// First partial word
+				if (f_rem != 0)
+				{
+					U mask = ~((U{1} << f_rem) - 1);
+					p[f_full] |= mask;
+					++f_full;
+				}
+
+				// Full words
+				for (size_type w = f_full; w < l_full; ++w)
+				{
+					p[w] = ~U{};
+				}
+
+				// Last partial word
+				if (l_rem != 0)
+				{
+					U mask = (U{1} << l_rem) - 1;
+					p[l_full] |= mask;
+				}
+			}
+		}
+
+		// ------------------------------------------------------------
+		// 10. Commit new size
+		// ------------------------------------------------------------
+		this->imp.curr_pos = new_size;
+		return idx;
+	}
+
+	template <typename R>
+	inline constexpr size_type insert_range_index(size_type idx, R &&r)
+	{
+		using U = underlying_type;
+
+		// ------------------------------------------------------------
+		// 1. Bounds check FIRST
+		// ------------------------------------------------------------
+		if (idx > this->imp.curr_pos)
+		{
+			::fast_io::fast_terminate();
+		}
+
+		// ------------------------------------------------------------
+		// 2. Sized-range fast path
+		// ------------------------------------------------------------
+		if constexpr (std::ranges::sized_range<R>)
+		{
+			size_type count = std::ranges::size(r);
+			if (count == 0)
+			{
+				return idx;
+			}
+
+			// Create gap of size count (shifts tail, preserves prefix)
+			this->insert_index(idx, count, false);
+
+			U *p = this->imp.begin_ptr;
+
+			// Bit position where we start writing
+			auto [start_full, start_rem] =
+				::fast_io::details::bitvec_split_bits<underlying_digits>(idx);
+
+			unsigned bit_offset = static_cast<unsigned>(start_rem);
+			size_type out_word = start_full;
+
+			// Preserve bits before idx in the first word
+			U acc{};
+			if (bit_offset != 0)
+			{
+				U low_mask = (U{1} << bit_offset) - 1;
+				acc = p[out_word] & low_mask;
+			}
+
+			// Stream bits from r into underlying words
+			for (auto &&elem : r)
+			{
+				bool b = static_cast<bool>(elem);
+				acc |= static_cast<U>(b) << bit_offset;
+				++bit_offset;
+
+				if (bit_offset == underlying_digits)
+				{
+					p[out_word] = acc;
+					++out_word;
+					acc = 0;
+					bit_offset = 0;
+				}
+			}
+
+			if (bit_offset != 0)
+			{
+				// Preserve upper bits after the inserted region in the last word
+				U upper_mask = ~((U{1} << bit_offset) - 1);
+				U upper = p[out_word] & upper_mask;
+				p[out_word] = upper | acc;
+			}
+
+			return count;
+		}
+		else
+		{
+			if (!::std::ranges::empty(r))
+			{
+				bitvec temp(::fast_io::freestanding::from_range, r);
+				this->insert_range_index(idx, temp);
+			}
+			return idx;
+		}
+	}
 };
 
 template <typename allocator>
@@ -2012,7 +2350,7 @@ inline constexpr bool operator==(
 
 	size_type bits = a.imp.curr_pos;
 
-	auto [full_bytes, rem] = ::fast_io::details::bitvec_split_bits<::fast_io::containers::bitvec<allocator>::underlying_digits>;
+	auto [full_bytes, rem] = ::fast_io::details::bitvec_split_bits<::fast_io::containers::bitvec<allocator>::underlying_digits>(bits);
 
 	// --- Compare full bytes ---
 	if consteval
@@ -2062,7 +2400,7 @@ inline constexpr ::std::strong_ordering operator<=>(
 
 	size_type min_bits = bits_a < bits_b ? bits_a : bits_b;
 
-	auto [full_bytes, rem] = ::fast_io::details::bitvec_split_bits<::fast_io::containers::bitvec<allocator>::underlying_digits>;
+	auto [full_bytes, rem] = ::fast_io::details::bitvec_split_bits<::fast_io::containers::bitvec<allocator>::underlying_digits>(min_bits);
 
 	// --- Compare full bytes ---
 	if (__builtin_is_constant_evaluated())
@@ -2117,6 +2455,12 @@ inline constexpr ::std::strong_ordering operator<=>(
 
 	// --- Compare lengths ---
 	return bits_a <=> bits_b;
+}
+
+template <typename allocator>
+constexpr void swap(::fast_io::containers::bitvec<allocator> &lhs, ::fast_io::containers::bitvec<allocator> &rhs) noexcept
+{
+	lhs.swap(rhs);
 }
 
 template <typename allocator>

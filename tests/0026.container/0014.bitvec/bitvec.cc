@@ -687,6 +687,138 @@ inline void test_bitvec_init_list_and_range()
 	::fast_io::io::print("bitvec initializer_list + range constructor test finished\n");
 }
 
+inline void test_bitvec_insert_and_erase()
+{
+	::fast_io::io::perr("=== bitvec insert/erase test ===\n");
+
+	using ::fast_io::bitvec;
+
+	bitvec bv;
+
+	// ------------------------------------------------------------
+	// 1. Start with a known pattern
+	// ------------------------------------------------------------
+	for (std::size_t i{}; i != 16; ++i)
+	{
+		bv.push_back((i & 1u) != 0u); // 010101...
+	}
+
+	// Verify initial pattern
+	for (std::size_t i{}; i != 16; ++i)
+	{
+		bool expected = (i & 1u) != 0u;
+		if (bv.test(i) != expected)
+		{
+			::fast_io::io::panicln("ERROR: initial pattern mismatch at ", i);
+		}
+	}
+
+	// ------------------------------------------------------------
+	// 2. insert_index: insert 3 zeros at position 5
+	// ------------------------------------------------------------
+	{
+		bitvec ref = bv;               // reference copy
+		ref.insert_index(5, 3, false); // expected result
+
+		bv.insert_index(5, 3, false); // actual result
+
+		if (bv.size() != ref.size())
+		{
+			::fast_io::io::panic("ERROR: insert_index size mismatch\n");
+		}
+
+		for (std::size_t i{}; i != bv.size(); ++i)
+		{
+			if (bv.test(i) != ref.test(i))
+			{
+				::fast_io::io::panicln("ERROR: insert_index mismatch at ", i);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------
+	// 3. insert_range_index with sized range
+	// ------------------------------------------------------------
+	{
+		bool arr[4]{1, 0, 1, 1};
+
+		bitvec ref = bv;                // reference before insertion
+		ref.insert_range_index(2, arr); // expected
+
+		bv.insert_range_index(2, arr); // actual
+
+		if (bv.size() != ref.size())
+		{
+			::fast_io::io::panic("ERROR: insert_range_index size mismatch\n");
+		}
+
+		for (std::size_t i{}; i != bv.size(); ++i)
+		{
+			if (bv.test(i) != ref.test(i))
+			{
+				::fast_io::io::panicln("ERROR: insert_range_index mismatch at ", i);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------
+	// 4. append_range
+	// ------------------------------------------------------------
+	{
+		int tail[5]{1, 1, 0, 0, 1};
+
+		bitvec ref = bv;
+		ref.append_range(tail);
+
+		bv.append_range(tail);
+
+		if (bv.size() != ref.size())
+		{
+			::fast_io::io::panic("ERROR: append_range size mismatch\n");
+		}
+
+		for (std::size_t i{}; i != bv.size(); ++i)
+		{
+			if (bv.test(i) != ref.test(i))
+			{
+				::fast_io::io::panicln("ERROR: append_range mismatch at ", i);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------
+	// 5. erase_index: erase 4 bits starting at index 3
+	// ------------------------------------------------------------
+	{
+		bitvec ref = bv;
+
+		ref.erase_index(3, 4);
+
+		bv.erase_index(3, 4);
+
+		if (ref != bv)
+		{
+			::fast_io::io::panic("ERROR: content mismatch\n");
+		}
+
+		if (bv.size() != ref.size())
+		{
+			::fast_io::io::panic("ERROR: erase_index size mismatch\n");
+		}
+
+		for (std::size_t i{}; i != bv.size(); ++i)
+		{
+			if (bv.test(i) != ref.test(i))
+			{
+				::fast_io::io::panicln("ERROR: erase_index mismatch at ", i);
+			}
+		}
+	}
+
+	::fast_io::io::print("bitvec insert/erase test finished\n");
+}
+
+
 int main()
 {
 	test_bitvec_basic();
@@ -701,6 +833,7 @@ int main()
 	test_bitvec_all_operations();
 	test_bitvec_init_list_and_range();
 	test_bitvec_bitops();
+	test_bitvec_insert_and_erase();
 
 	::fast_io::io::print("All bitvec tests finished\n");
 }
