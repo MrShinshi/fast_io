@@ -453,6 +453,74 @@ inline void test_bitvec_reserve_and_push_back_unchecked()
 	::fast_io::io::print("bitvec reserve + push_back_unchecked test finished\n");
 }
 
+inline void test_bitvec_all_operations()
+{
+	::fast_io::io::perr("=== bitvec _all operations test ===\n");
+
+	::fast_io::bitvec bv;
+
+	// Create a bitvec with a size that forces a partial byte
+	constexpr std::size_t N = 100; // 100 bits → 12 full bytes + 4 bits
+	for (std::size_t i{}; i != N; ++i)
+	{
+		bv.push_back((i & 1u) != 0u); // alternating pattern
+	}
+
+	// --- Test reset_all() ---
+	bv.reset_all();
+
+	for (std::size_t i{}; i != N; ++i)
+	{
+		if (bv.test(i) != false)
+		{
+			::fast_io::io::panicln("ERROR: reset_all mismatch at index ", i);
+		}
+	}
+
+	// --- Test set_all() ---
+	bv.set_all();
+
+	for (std::size_t i{}; i != N; ++i)
+	{
+		if (bv.test(i) != true)
+		{
+			::fast_io::io::panicln("ERROR: set_all mismatch at index ", i);
+		}
+	}
+
+	// --- Test flip_all() ---
+	// After flip_all(), all bits should become 0
+	bv.flip_all();
+
+	for (std::size_t i{}; i != N; ++i)
+	{
+		if (bv.test(i) != false)
+		{
+			::fast_io::io::panicln("ERROR: flip_all mismatch at index ", i);
+		}
+	}
+
+	// --- Test flip_all() again ---
+	// Should restore all bits to 1
+	bv.flip_all();
+
+	for (std::size_t i{}; i != N; ++i)
+	{
+		if (bv.test(i) != true)
+		{
+			::fast_io::io::panicln("ERROR: flip_all second pass mismatch at index ", i);
+		}
+	}
+
+	// --- Ensure size and capacity unchanged ---
+	if (bv.size() != N)
+	{
+		::fast_io::io::panic("ERROR: size changed after _all operations\n");
+	}
+
+	::fast_io::io::print("bitvec _all operations test finished\n");
+}
+
 int main()
 {
 	test_bitvec_basic();
@@ -464,6 +532,7 @@ int main()
 	test_bitvec_move();
 	test_bitvec_flip();
 	test_bitvec_reserve_and_push_back_unchecked();
+	test_bitvec_all_operations();
 
 	::fast_io::io::print("All bitvec tests finished\n");
 }

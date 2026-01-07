@@ -722,6 +722,111 @@ public:
 			this->grow_to_new_capacity(bits_to_blocks(n));
 		}
 	}
+	constexpr bool is_empty() const noexcept
+	{
+		return !this->imp.curr_pos;
+	}
+	constexpr bool empty() const noexcept
+	{
+		return !this->imp.curr_pos;
+	}
+	constexpr void shrink_to_fit() noexcept
+	{
+		size_type currpos{this->imp.curr_pos};
+		size_type endpos{this->imp.end_pos};
+		if (!currpos)
+		{
+			if (endpos)
+			{
+				this->clear_destroy();
+			}
+			return;
+		}
+		size_type const curblocks{size_bytes()};
+		size_type const endblocks{capacity_bytes()};
+		if (curblocks != endblocks)
+		{
+			this->grow_to_new_capacity(curblocks);
+		}
+	}
+	constexpr void reset_all() noexcept
+	{
+		::fast_io::freestanding::fill_n(this->imp.begin_ptr, this->size_bytes(), 0u);
+	}
+
+	constexpr void flip_all() noexcept
+	{
+		size_type bits = this->imp.curr_pos;
+		size_type bytes = this->size_bytes();
+		if (bytes == 0)
+		{
+			return;
+		}
+
+		underlying_pointer p = this->imp.begin_ptr;
+
+		size_type full_bytes;
+		size_type rem;
+		// Full bytes
+		constexpr underlying_type mask{static_cast<underlying_type>(~static_cast<underlying_type>(0u))};
+		if constexpr (underlying_digits == 8)
+		{
+			full_bytes = bits >> 3u;
+			rem = bits & 7u;
+		}
+		else
+		{
+			full_bytes = bits / underlying_digits;
+			rem = bits % underlying_digits;
+		}
+		underlying_pointer it = p;
+		underlying_pointer end_full = p + full_bytes;
+		for (; it != end_full; ++it)
+		{
+			*it ^= mask;
+		}
+
+		// Partial byte
+		if (rem)
+		{
+			*it ^= static_cast<underlying_type>((1u << rem) - 1u);
+		}
+	}
+
+	constexpr void set_all() noexcept
+	{
+		size_type bits = this->imp.curr_pos;
+		size_type bytes = this->size_bytes();
+		if (bytes == 0)
+		{
+			return;
+		}
+
+		underlying_pointer p = this->imp.begin_ptr;
+
+		size_type full_bytes;
+		size_type rem;
+		// Full bytes
+		constexpr underlying_type mask{static_cast<underlying_type>(~static_cast<underlying_type>(0u))};
+		if constexpr (underlying_digits == 8)
+		{
+			full_bytes = bits >> 3u;
+			rem = bits & 7u;
+		}
+		else
+		{
+			full_bytes = bits / underlying_digits;
+			rem = bits % underlying_digits;
+		}
+
+		::fast_io::freestanding::fill_n(p, full_bytes, mask);
+
+		// Partial byte
+		if (rem)
+		{
+			p[full_bytes] = static_cast<underlying_type>((1u << rem) - 1u);
+		}
+	}
 };
 
 } // namespace containers

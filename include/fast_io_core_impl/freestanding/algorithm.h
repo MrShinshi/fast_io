@@ -136,6 +136,28 @@ inline constexpr output_iter copy(input_iter first, input_iter last, output_iter
 template <::std::input_iterator fwd_iter, typename T>
 inline constexpr void fill(fwd_iter first, fwd_iter last, T value)
 {
+	if constexpr (::std::contiguous_iterator<fwd_iter>)
+	{
+		if constexpr (::std::is_trivially_copyable_v<fwd_iter> &&
+					  ::std::is_scalar_v<fwd_iter> && sizeof(fwd_iter) == 1)
+		{
+#ifdef __cpp_if_consteval
+			if !consteval
+#else
+			if (!__builtin_is_constant_evaluated())
+#endif
+			{
+#if FAST_IO_HAS_BUILTIN(__builtin_memset)
+				__builtin_memset
+#else
+				::std::memset
+#endif
+					(::std::to_address(first),
+					 static_cast<fwd_iter>(value),
+					 static_cast<::std::size_t>(last - first));
+			}
+		}
+	}
 	for (; first != last; ++first)
 	{
 		*first = value;
@@ -145,6 +167,28 @@ inline constexpr void fill(fwd_iter first, fwd_iter last, T value)
 template <::std::input_iterator fwd_iter, typename T>
 inline constexpr void fill_n(fwd_iter first, ::std::size_t n, T value)
 {
+	if constexpr (::std::contiguous_iterator<fwd_iter>)
+	{
+		if constexpr (::std::is_trivially_copyable_v<fwd_iter> &&
+					  ::std::is_scalar_v<fwd_iter> && sizeof(fwd_iter) == 1)
+		{
+#ifdef __cpp_if_consteval
+			if !consteval
+#else
+			if (!__builtin_is_constant_evaluated())
+#endif
+			{
+#if FAST_IO_HAS_BUILTIN(__builtin_memset)
+				__builtin_memset
+#else
+				::std::memset
+#endif
+					(::std::to_address(first),
+					 static_cast<fwd_iter>(value),
+					 n);
+			}
+		}
+	}
 	for (::std::size_t i{}; i != n; ++i)
 	{
 		*first = value;
