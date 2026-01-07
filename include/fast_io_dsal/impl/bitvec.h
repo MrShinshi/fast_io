@@ -72,7 +72,7 @@ private:
 
 			for (auto &&elem : r)
 			{
-				acc |= static_cast<underlying_type>(static_cast<bool>(elem)) << bit_count;
+				acc |= static_cast<underlying_type>(static_cast<underlying_type>(static_cast<bool>(elem)) << bit_count);
 				++bit_count;
 
 				if (bit_count == underlying_digits)
@@ -242,7 +242,7 @@ private:
 		if (rem_bits != 0u)
 		{
 			U last = other.begin_ptr[full_units];
-			U mask = (U{1} << rem_bits) - 1;
+			U mask = static_cast<underlying_type>((U{1} << rem_bits) - 1u);
 			*it = static_cast<U>(last & mask);
 		}
 
@@ -1282,7 +1282,7 @@ public:
 		if (rem)
 		{
 			using U = underlying_type;
-			U mask = (U{1} << rem) - 1;
+			U mask = static_cast<U>((U{1} << rem) - 1u);
 			if ((*it & mask))
 			{
 				return false;
@@ -1967,13 +1967,13 @@ public:
 
 			auto [byte_index, bit_offset] = ::fast_io::details::bitvec_split_bits<underlying_digits>(bitpos);
 
-			underlying_type acc = bp[byte_index] & ((1u << bit_offset) - 1u);
+			underlying_type acc = bp[byte_index] & static_cast<underlying_type>((1u << bit_offset) - 1u);
 			size_type out_byte = byte_index;
 
 			for (auto &&elem : r)
 			{
 				bool b = static_cast<bool>(elem);
-				acc |= static_cast<unsigned char>(b) << bit_offset;
+				acc |= static_cast<underlying_type>(static_cast<underlying_type>(b) << bit_offset);
 				++bit_offset;
 				++bitpos;
 

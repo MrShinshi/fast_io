@@ -817,7 +817,7 @@ inline void test_bitvec_insert_and_erase()
 
 	::fast_io::io::print("bitvec insert/erase test finished\n");
 }
-
+#endif
 
 int main()
 {
