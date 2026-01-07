@@ -397,11 +397,10 @@ public:
 			size_type byte_index{pos / underlying_digits};
 			size_type bit_index{pos % underlying_digits};
 
-			underlying_type &byteval = imp.begin_ptr[byte_index];
 			underlying_type mask =
 				static_cast<underlying_type>(1u << bit_index);
 
-			byteval &= static_cast<underlying_type>(~mask);
+			imp.begin_ptr[byte_index] &= static_cast<underlying_type>(~mask);
 		}
 	}
 	inline constexpr void reset(size_type pos) noexcept
@@ -417,40 +416,18 @@ public:
 	{
 		// Position of last bit (curr_pos > 0 assumed)
 		size_type bitpos{imp.curr_pos - 1};
+		auto [byte_index, bit_index] = ::fast_io::details::bitvec_split_bits<underlying_digits>(bitpos);
 
-		if constexpr (underlying_digits == 8)
-		{
-			size_type byte_index{bitpos >> 3}; // bitpos / 8
-			size_type bit_index{bitpos & 7};   // bitpos % 8
+		underlying_type &byteval = imp.begin_ptr[byte_index];
+		underlying_type mask =
+			static_cast<underlying_type>(1u << bit_index);
 
-			underlying_type &byteval = imp.begin_ptr[byte_index];
-			underlying_type mask = static_cast<underlying_type>(1u << bit_index);
+		bool old = (byteval >> bit_index) & 1u;
 
-			// Read the bit before clearing it
-			bool old = (byteval >> bit_index) & 1u;
+		byteval &= static_cast<underlying_type>(~mask);
 
-			// Clear the bit
-			byteval &= static_cast<underlying_type>(~mask);
-
-			--imp.curr_pos;
-			return old;
-		}
-		else
-		{
-			size_type byte_index{bitpos / underlying_digits};
-			size_type bit_index{bitpos % underlying_digits};
-
-			underlying_type &byteval = imp.begin_ptr[byte_index];
-			underlying_type mask =
-				static_cast<underlying_type>(1u << bit_index);
-
-			bool old = (byteval >> bit_index) & 1u;
-
-			byteval &= static_cast<underlying_type>(~mask);
-
-			--imp.curr_pos;
-			return old;
-		}
+		--imp.curr_pos;
+		return old;
 	}
 
 	inline constexpr bool pop_back() noexcept
@@ -1979,7 +1956,7 @@ public:
 			size_type add = static_cast<size_type>(::std::ranges::size(r));
 			size_type old_size = this->imp.curr_pos;
 
-			// Reserve first — this may throw
+			// Reserve first
 			this->reserve(old_size + add);
 
 			rollback_guard guard{this, old_size};
@@ -2111,6 +2088,7 @@ public:
 		return idx;
 	}
 
+#if 0
 	inline constexpr size_type insert_index(size_type idx, size_type count, bool value) noexcept
 	{
 		using U = underlying_type;
@@ -2253,7 +2231,9 @@ public:
 		this->imp.curr_pos = new_size;
 		return idx;
 	}
-
+#endif
+public:
+#if 0
 	template <typename R>
 	inline constexpr size_type insert_range_index(size_type idx, R &&r)
 	{
@@ -2334,6 +2314,7 @@ public:
 			return idx;
 		}
 	}
+#endif
 };
 
 template <typename allocator>

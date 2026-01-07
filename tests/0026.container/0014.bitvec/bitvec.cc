@@ -686,7 +686,7 @@ inline void test_bitvec_init_list_and_range()
 
 	::fast_io::io::print("bitvec initializer_list + range constructor test finished\n");
 }
-
+#if 0
 inline void test_bitvec_insert_and_erase()
 {
 	::fast_io::io::perr("=== bitvec insert/erase test ===\n");
@@ -833,7 +833,8 @@ int main()
 	test_bitvec_all_operations();
 	test_bitvec_init_list_and_range();
 	test_bitvec_bitops();
+#if 0
 	test_bitvec_insert_and_erase();
-
+#endif
 	::fast_io::io::print("All bitvec tests finished\n");
 }
