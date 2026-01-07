@@ -1166,8 +1166,6 @@ public:
 		auto [full_bytes, rem] =
 			::fast_io::details::bitvec_split_bits<underlying_digits>(bits);
 
-		size_type total_bytes = full_bytes + (rem != 0);
-
 		bool found = false;
 
 		// full bytes

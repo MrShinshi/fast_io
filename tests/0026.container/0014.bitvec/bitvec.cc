@@ -550,7 +550,7 @@ inline void test_bitvec_bitops()
 	::fast_io::bitvec d = a | b;
 	for (::std::size_t i{}; i != 256u; ++i)
 	{
-		bool expected = ((i & 1u) != 0u) || ((i & 3u) == 2u);
+		bool expected = a.test(i) && b.test(i);
 		if (d.test(i) != expected)
 		{
 			::fast_io::io::panicln("ERROR: operator| mismatch at index ", i);
