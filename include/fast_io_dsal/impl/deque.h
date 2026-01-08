@@ -1189,13 +1189,13 @@ private:
 	{
 		run_destroy des(__builtin_addressof(this->controller));
 
+		auto front_controller_ptr{controller.front_block.controller_ptr};
+		auto back_controller_ptr{controller.back_block.controller_ptr};
+
 		auto dq_back_backup{controller.back_block};
 		controller.back_block = controller.front_block;
 		auto dq_back_end_ptr_backup{controller.back_end_ptr};
 		controller.back_end_ptr = controller.back_begin_ptr;
-
-		auto front_controller_ptr{controller.front_block.controller_ptr};
-		auto back_controller_ptr{controller.back_block.controller_ptr};
 
 		T *lastblockbegin;
 		if (front_controller_ptr == back_controller_ptr)
@@ -1278,14 +1278,12 @@ private:
 			auto const dist{::std::ranges::distance(first, last)};
 
 			this->init_blocks_common<false>(static_cast<::std::size_t>(dist));
-
+			auto front_controller_ptr{controller.front_block.controller_ptr};
+			auto back_controller_ptr{controller.back_block.controller_ptr};
 			auto dq_back_backup{this->controller.back_block};
 			this->controller.back_block = this->controller.front_block;
 			auto dq_back_end_ptr_backup{controller.back_end_ptr};
 			controller.back_end_ptr = controller.front_end_ptr;
-
-			auto front_controller_ptr{controller.front_block.controller_ptr};
-			auto back_controller_ptr{controller.back_block.controller_ptr};
 
 			T *lastblockbegin;
 			if (front_controller_ptr == back_controller_ptr)
