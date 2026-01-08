@@ -94,10 +94,9 @@ inline constexpr void deque_add_assign_signed_impl(::fast_io::containers::detail
 	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
 	if (pos < 0)
 	{
-		diff = blocksizem1 - diff;
 		constexpr size_type zero{};
 		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-		diff += abspos;
+		diff = (blocksizem1 + abspos) - diff;
 		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
 	}
 	else
@@ -142,7 +141,7 @@ inline constexpr void deque_sub_assign_signed_impl(::fast_io::containers::detail
 	}
 	else
 	{
-		diff = blocksize + unsignedpos - diff;
+		diff = blocksizem1 + unsignedpos - diff;
 		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
 	}
 	itercontent.begin_ptr = begin_ptr;
@@ -156,7 +155,7 @@ inline constexpr void deque_sub_assign_unsigned_impl(::fast_io::containers::deta
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
 	constexpr size_type blocksizem1{blocksize - 1u};
-	size_type diff{blocksize + unsignedpos -
+	size_type diff{blocksizem1 + unsignedpos -
 				   static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr)};
 	auto begin_ptr{*(itercontent.controller_ptr -= diff / blocksize)};
 	itercontent.begin_ptr = begin_ptr;
@@ -164,7 +163,7 @@ inline constexpr void deque_sub_assign_unsigned_impl(::fast_io::containers::deta
 }
 
 template <typename T>
-inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_control_block<T> const &itercontent, ::std::ptrdiff_t pos) noexcept
 {
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
@@ -189,7 +188,7 @@ inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_con
 }
 
 template <typename T>
-inline constexpr T &deque_index_unsigned(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::size_t unsignedpos) noexcept
+inline constexpr T &deque_index_unsigned(::fast_io::containers::details::deque_control_block<T> const &itercontent, ::std::size_t unsignedpos) noexcept
 {
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
@@ -1298,7 +1297,7 @@ private:
 		}
 		else
 		{
-			controller = {};
+			this->controller = {};
 			for (; first != last; ++first)
 			{
 				this->push_back(*first);
