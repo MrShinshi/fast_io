@@ -13,15 +13,15 @@ struct
 #endif
 	deque_control_block_common
 {
+	::std::byte *begin_ptr, *curr_ptr;
 	::std::byte **controller_ptr;
-	::std::byte *begin_ptr, *curr_ptr, *end_ptr;
 };
 
 template <typename T>
 struct deque_control_block
 {
+	T *begin_ptr, *curr_ptr;
 	T **controller_ptr;
-	T *begin_ptr, *curr_ptr, *end_ptr;
 };
 
 inline constexpr ::std::size_t deque_block_size_shift{12};
@@ -29,7 +29,7 @@ inline constexpr ::std::size_t deque_block_size_shift{12};
 inline constexpr ::std::size_t deque_block_size_common{static_cast<::std::size_t>(1) << deque_block_size_shift};
 
 template <::std::size_t sz>
-inline constexpr ::std::size_t deque_block_size{sz <= (deque_block_size_common / 16u) ? (deque_block_size_common / sz) : 16u};
+inline constexpr ::std::size_t deque_block_size{sz <= (deque_block_size_common / 16u) ? ::std::bit_ceil(static_cast<::std::size_t>(deque_block_size_common / sz)) : static_cast<::std::size_t>(16u)};
 
 struct
 #if __has_cpp_attribute(__gnu__::__may_alias__)
@@ -60,7 +60,9 @@ struct deque_controller
 	using replacetype = T;
 	using controlreplacetype = T *;
 	::fast_io::containers::details::deque_control_block<T> front_block;
+	controlreplacetype front_end_ptr;
 	::fast_io::containers::details::deque_control_block<T> back_block;
+	controlreplacetype back_end_ptr;
 	::fast_io::containers::details::deque_controller_block<T> controller_block;
 };
 
@@ -73,9 +75,126 @@ struct
 	using replacetype = ::std::byte;
 	using controlreplacetype = ::std::byte *;
 	::fast_io::containers::details::deque_control_block_common front_block;
+	controlreplacetype front_end_ptr;
 	::fast_io::containers::details::deque_control_block_common back_block;
+	controlreplacetype back_end_ptr;
 	::fast_io::containers::details::deque_controller_block_common controller_block;
 };
+
+template <typename T>
+inline constexpr void deque_add_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type unsignedpos{static_cast<size_type>(pos)};
+	auto begin_ptr{itercontent.begin_ptr};
+	auto curr_ptr{itercontent.curr_ptr};
+	auto controllerptr{itercontent.controller_ptr};
+	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
+	if (pos < 0)
+	{
+		constexpr size_type zero{};
+		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
+		diff = (blocksizem1 + abspos) - diff;
+		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+	}
+	else
+	{
+		diff += unsignedpos;
+		curr_ptr = (begin_ptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+	}
+	itercontent.begin_ptr = begin_ptr;
+	itercontent.curr_ptr = curr_ptr;
+	itercontent.controller_ptr = controllerptr;
+}
+
+template <typename T>
+inline constexpr void deque_add_assign_unsigned_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+
+	size_type diff{static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr) + unsignedpos};
+	auto begin_ptr{*(itercontent.controller_ptr += diff / blocksize)};
+	itercontent.begin_ptr = begin_ptr;
+	itercontent.curr_ptr = begin_ptr + diff % blocksize;
+}
+
+template <typename T>
+inline constexpr void deque_sub_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type unsignedpos{static_cast<size_type>(pos)};
+	auto begin_ptr{itercontent.begin_ptr};
+	auto curr_ptr{itercontent.curr_ptr};
+	auto controllerptr{itercontent.controller_ptr};
+	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
+	if (pos < 0)
+	{
+		constexpr size_type zero{};
+		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
+		diff += abspos;
+		curr_ptr = (begin_ptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+	}
+	else
+	{
+		diff = blocksizem1 + unsignedpos - diff;
+		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+	}
+	itercontent.begin_ptr = begin_ptr;
+	itercontent.curr_ptr = curr_ptr;
+	itercontent.controller_ptr = controllerptr;
+}
+
+template <typename T>
+inline constexpr void deque_sub_assign_unsigned_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type diff{blocksizem1 + unsignedpos -
+				   static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr)};
+	auto begin_ptr{*(itercontent.controller_ptr -= diff / blocksize)};
+	itercontent.begin_ptr = begin_ptr;
+	itercontent.curr_ptr = begin_ptr + (blocksizem1 - diff % blocksize);
+}
+
+template <typename T>
+inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_control_block<T> const &itercontent, ::std::ptrdiff_t pos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type unsignedpos{static_cast<size_type>(pos)};
+	auto begin_ptr{itercontent.begin_ptr};
+	auto curr_ptr{itercontent.curr_ptr};
+	auto controllerptr{itercontent.controller_ptr};
+	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
+	if (pos < 0)
+	{
+		constexpr size_type zero{};
+		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
+		diff = blocksizem1 + abspos - diff;
+		return (*(controllerptr - diff / blocksize))[blocksizem1 - diff % blocksize];
+	}
+	else
+	{
+		diff += unsignedpos;
+		return controllerptr[diff / blocksize][diff % blocksize];
+	}
+}
+
+template <typename T>
+inline constexpr T &deque_index_unsigned(::fast_io::containers::details::deque_control_block<T> const &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	size_type const diff{static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr) + unsignedpos};
+	return itercontent.controller_ptr[diff / blocksize][diff % blocksize];
+}
 
 template <typename T, bool isconst>
 struct deque_iterator
@@ -91,42 +210,21 @@ struct deque_iterator
 	using difference_type = ::std::ptrdiff_t;
 
 	deque_control_block<T> itercontent;
-#if __has_cpp_attribute(clang::no_sanitize)
-	[[clang::no_sanitize("undefined")]]
-#endif
+
 	inline constexpr deque_iterator &operator++() noexcept
 	{
-		if (++itercontent.curr_ptr == itercontent.end_ptr) [[unlikely]]
+		if ((itercontent.begin_ptr + ::fast_io::containers::details::deque_block_size<sizeof(value_type)>) == ++itercontent.curr_ptr) [[unlikely]]
 		{
-			constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-			auto tmp{(itercontent.curr_ptr = itercontent.begin_ptr = (*++itercontent.controller_ptr))};
-			constexpr bool ubsandisabled{
-#if __has_cpp_attribute(clang::no_sanitize)
-				true
-#endif
-			};
-			if constexpr (ubsandisabled)
-			{
-				tmp += blocksize;
-			}
-			else
-			{
-				if (tmp) [[likely]] // this makes no sense for sentinel
-				{
-					tmp += blocksize;
-				}
-			}
-			itercontent.end_ptr = tmp;
+			itercontent.curr_ptr = itercontent.begin_ptr = (*++itercontent.controller_ptr);
 		}
 		return *this;
 	}
 
 	inline constexpr deque_iterator &operator--() noexcept
 	{
-		if (itercontent.curr_ptr == itercontent.begin_ptr) [[unlikely]]
+		if (itercontent.begin_ptr == itercontent.curr_ptr) [[unlikely]]
 		{
-			constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-			itercontent.end_ptr = itercontent.curr_ptr = ((itercontent.begin_ptr = (*--itercontent.controller_ptr)) + blocksize);
+			itercontent.curr_ptr = (itercontent.begin_ptr = (*--itercontent.controller_ptr)) + ::fast_io::containers::details::deque_block_size<sizeof(value_type)>;
 		}
 		--itercontent.curr_ptr;
 		return *this;
@@ -155,83 +253,48 @@ struct deque_iterator
 	{
 		return this->itercontent.curr_ptr;
 	}
-
-	inline constexpr deque_iterator &operator+=(difference_type pos) noexcept
+	template <::std::integral postype>
+	inline constexpr deque_iterator &operator+=(postype pos) noexcept
 	{
-		constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-		constexpr size_type blocksizem1{blocksize - 1u};
-		size_type unsignedpos{static_cast<size_type>(pos)};
-		auto curr_ptr{this->itercontent.curr_ptr};
-		auto controllerptr{this->itercontent.controller_ptr};
-		decltype(curr_ptr) beginptr;
-		if (pos < 0)
+		if constexpr (::std::signed_integral<postype>)
 		{
-			size_type diff{static_cast<size_type>(this->itercontent.end_ptr - curr_ptr)};
-			constexpr size_type zero{};
-			size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-			diff += abspos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+			::fast_io::containers::details::deque_add_assign_signed_impl(
+				this->itercontent, static_cast<difference_type>(pos));
 		}
 		else
 		{
-			size_type diff{static_cast<size_type>(curr_ptr - this->itercontent.begin_ptr)};
-			diff += unsignedpos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+			::fast_io::containers::details::deque_add_assign_unsigned_impl(
+				this->itercontent, static_cast<size_type>(pos));
 		}
-		this->itercontent.controller_ptr = controllerptr;
-		this->itercontent.begin_ptr = beginptr;
-		this->itercontent.end_ptr = beginptr + blocksize;
 		return *this;
 	}
-
-	inline constexpr deque_iterator &operator-=(difference_type pos) noexcept
+	template <::std::integral postype>
+	inline constexpr deque_iterator &operator-=(postype pos) noexcept
 	{
-		constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-		constexpr size_type blocksizem1{blocksize - 1u};
-		size_type unsignedpos{static_cast<size_type>(pos)};
-		auto curr_ptr{this->itercontent.curr_ptr};
-		auto controllerptr{this->itercontent.controller_ptr};
-		decltype(curr_ptr) beginptr;
-		if (pos < 0)
+		if constexpr (::std::signed_integral<postype>)
 		{
-			size_type diff{static_cast<size_type>(curr_ptr - this->itercontent.begin_ptr)};
-			constexpr size_type zero{};
-			size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-			diff += abspos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+			::fast_io::containers::details::deque_sub_assign_signed_impl(
+				this->itercontent, static_cast<difference_type>(pos));
 		}
 		else
 		{
-			size_type diff{static_cast<size_type>(this->itercontent.end_ptr - curr_ptr)};
-			diff += unsignedpos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+			::fast_io::containers::details::deque_sub_assign_unsigned_impl(
+				this->itercontent, static_cast<size_type>(pos));
 		}
-		this->itercontent.controller_ptr = controllerptr;
-		this->itercontent.begin_ptr = beginptr;
-		this->itercontent.end_ptr = beginptr + blocksize;
 		return *this;
 	}
-
-	inline constexpr reference operator[](difference_type pos) const noexcept
+	template <::std::integral postype>
+	inline constexpr reference operator[](postype pos) const noexcept
 	{
-		constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-		constexpr size_type blocksizem1{blocksize - 1u};
-		size_type unsignedpos{static_cast<size_type>(pos)};
-		auto curr_ptr{this->itercontent.curr_ptr};
-		auto controllerptr{this->itercontent.controller_ptr};
-		if (pos < 0)
+		if constexpr (::std::signed_integral<postype>)
 		{
-			size_type diff{static_cast<size_type>(this->itercontent.end_ptr - curr_ptr) - 1u};
-			constexpr size_type zero{};
-			size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-			diff += abspos;
-			return (*(controllerptr - diff / blocksize))[blocksizem1 - diff % blocksize];
+			return ::fast_io::containers::details::deque_index_signed(this->itercontent,
+																	  static_cast<difference_type>(pos));
 		}
 		else
 		{
-			size_type diff{static_cast<size_type>(curr_ptr - this->itercontent.begin_ptr)};
-			diff += unsignedpos;
-			return controllerptr[diff / blocksize][diff % blocksize];
+			return ::fast_io::containers::details::deque_index_unsigned(this->itercontent,
+																		static_cast<size_type>(pos));
 		}
 	}
 
@@ -242,22 +305,52 @@ struct deque_iterator
 	}
 };
 
-template <typename T, bool isconst>
-inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(::fast_io::containers::details::deque_iterator<T, isconst> a, ::std::ptrdiff_t pos) noexcept
+template <typename T, bool isconst, ::std::integral postype>
+inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(::fast_io::containers::details::deque_iterator<T, isconst> a, postype pos) noexcept
 {
-	return (a += pos);
+	if constexpr (::std::signed_integral<postype>)
+	{
+		::fast_io::containers::details::deque_add_assign_signed_impl(
+			a.itercontent, static_cast<::std::ptrdiff_t>(pos));
+	}
+	else
+	{
+		::fast_io::containers::details::deque_add_assign_unsigned_impl(
+			a.itercontent, static_cast<::std::size_t>(pos));
+	}
+	return a;
 }
 
-template <typename T, bool isconst>
-inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(::std::ptrdiff_t pos, ::fast_io::containers::details::deque_iterator<T, isconst> a) noexcept
+template <typename T, bool isconst, ::std::integral postype>
+inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(postype pos, ::fast_io::containers::details::deque_iterator<T, isconst> a) noexcept
 {
-	return (a += pos);
+	if constexpr (::std::signed_integral<postype>)
+	{
+		::fast_io::containers::details::deque_add_assign_signed_impl(
+			a.itercontent, static_cast<::std::ptrdiff_t>(pos));
+	}
+	else
+	{
+		::fast_io::containers::details::deque_add_assign_unsigned_impl(
+			a.itercontent, static_cast<::std::size_t>(pos));
+	}
+	return a;
 }
 
-template <typename T, bool isconst>
-inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator-(::fast_io::containers::details::deque_iterator<T, isconst> a, ::std::ptrdiff_t pos) noexcept
+template <typename T, bool isconst, ::std::integral postype>
+inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator-(::fast_io::containers::details::deque_iterator<T, isconst> a, postype pos) noexcept
 {
-	return (a -= pos);
+	if constexpr (::std::signed_integral<postype>)
+	{
+		::fast_io::containers::details::deque_sub_assign_signed_impl(
+			a.itercontent, static_cast<::std::ptrdiff_t>(pos));
+	}
+	else
+	{
+		::fast_io::containers::details::deque_sub_assign_unsigned_impl(
+			a.itercontent, static_cast<::std::size_t>(pos));
+	}
+	return a;
 }
 
 template <typename T>
@@ -266,6 +359,14 @@ inline constexpr ::std::ptrdiff_t deque_iter_difference_common(::fast_io::contai
 	::std::ptrdiff_t controllerdiff{a.controller_ptr - b.controller_ptr};
 	constexpr ::std::ptrdiff_t blocksizedf{static_cast<::std::ptrdiff_t>(::fast_io::containers::details::deque_block_size<sizeof(T)>)};
 	return controllerdiff * blocksizedf + (a.curr_ptr - b.begin_ptr) + (b.begin_ptr - b.curr_ptr);
+}
+
+template <typename T>
+inline constexpr ::std::size_t deque_iter_difference_unsigned_common(::fast_io::containers::details::deque_control_block<T> const &a, ::fast_io::containers::details::deque_control_block<T> const &b) noexcept
+{
+	::std::size_t controllerdiff{a.controller_ptr - b.controller_ptr};
+	constexpr ::std::size_t blocksizedf{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	return controllerdiff * blocksizedf + static_cast<::std::size_t>((a.curr_ptr - b.begin_ptr) + (b.begin_ptr - b.curr_ptr));
 }
 
 template <typename T, bool isconst1, bool isconst2>
@@ -489,7 +590,7 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 	::std::size_t halfsize{bytes >> 1u};
 
 	back_block.begin_ptr = front_block.begin_ptr = begin_ptr;
-	back_block.end_ptr = front_block.end_ptr = (begin_ptr + bytes);
+	controller.back_end_ptr = controller.front_end_ptr = (begin_ptr + bytes);
 	auto halfposptr{begin_ptr + halfsize};
 	front_block.curr_ptr = halfposptr;
 	back_block.curr_ptr = halfposptr;
@@ -591,13 +692,13 @@ inline constexpr void deque_grow_back_common_impl(
 		}
 	}
 
-	if (controller.back_block.controller_ptr == controller.front_block.controller_ptr && controller.front_block.curr_ptr == controller.front_block.end_ptr)
+	if (controller.back_block.controller_ptr == controller.front_block.controller_ptr && controller.front_block.curr_ptr == controller.front_end_ptr)
 	{
 		auto front_block_controller_ptr{controller.front_block.controller_ptr + 1};
 		controller.front_block.controller_ptr = front_block_controller_ptr;
 		auto front_begin_ptr = static_cast<begin_ptrtype>(*front_block_controller_ptr);
 		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
-		controller.front_block.end_ptr = front_begin_ptr + bytes;
+		controller.front_end_ptr = front_begin_ptr + bytes;
 	}
 
 	/**
@@ -614,7 +715,7 @@ inline constexpr void deque_grow_back_common_impl(
 
 	controller.back_block.begin_ptr = begin_ptr;
 	controller.back_block.curr_ptr = begin_ptr;
-	controller.back_block.end_ptr = begin_ptr + bytes;
+	controller.back_end_ptr = begin_ptr + bytes;
 
 #if 0
 	::fast_io::iomnp::debug_println(::std::source_location::current());
@@ -702,7 +803,7 @@ inline constexpr void deque_grow_front_common_impl(
 									"\n\tstart_ptr:", ::fast_io::iomnp::pointervw(controller.controller_block.controller_start_ptr));
 #endif
 	controller.front_block.begin_ptr = begin_ptr;
-	controller.front_block.end_ptr = (controller.front_block.curr_ptr = (begin_ptr + bytes));
+	controller.front_end_ptr = (controller.front_block.curr_ptr = (begin_ptr + bytes));
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
@@ -742,7 +843,7 @@ inline constexpr void deque_clear_common_impl(dequecontroltype &controller, ::st
 	controller.back_block.controller_ptr = controller.front_block.controller_ptr = reserved_pivot;
 	controller.back_block.begin_ptr = controller.front_block.begin_ptr = begin_ptr;
 	controller.back_block.curr_ptr = controller.front_block.curr_ptr = mid_ptr;
-	controller.back_block.end_ptr = controller.front_block.end_ptr = end_ptr;
+	controller.back_end_ptr = controller.front_end_ptr = end_ptr;
 }
 
 template <typename allocator, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
@@ -757,7 +858,7 @@ inline constexpr void deque_allocate_init_blocks_dezeroing_impl(dequecontroltype
 {
 	if (!blocks_count_least)
 	{
-		controller = {{}, {}, {}};
+		controller = {};
 		return;
 	}
 	constexpr ::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
@@ -788,11 +889,11 @@ inline constexpr void deque_allocate_init_blocks_dezeroing_impl(dequecontroltype
 	using replacetype = typename dequecontroltype::replacetype;
 	using begin_ptrtype = replacetype *;
 	begin_ptrtype reserve_start_block{static_cast<begin_ptrtype>(*reserve_start)};
-	controller.front_block = {
-		reserve_start, reserve_start_block, reserve_start_block, reserve_start_block + blockbytes};
+	controller.front_block = {reserve_start_block, reserve_start_block, reserve_start};
+	controller.front_end_ptr = reserve_start_block + blockbytes;
 	begin_ptrtype reserve_back_block{static_cast<begin_ptrtype>(reserve_after[-1])};
-	controller.back_block = {
-		reserve_after - 1, reserve_back_block, reserve_back_block, reserve_back_block + blockbytes};
+	controller.back_block = {reserve_back_block, reserve_back_block, reserve_after - 1};
+	controller.back_end_ptr = reserve_back_block + blockbytes;
 	controller.controller_block = {
 		start_ptr, reserve_start, reserve_after, start_ptr + blocks_count};
 }
@@ -880,7 +981,7 @@ inline constexpr void deque_clone_trivial_impl(dequecontroltype &controller, deq
 {
 	if (fromcontroller.front_block.curr_ptr == fromcontroller.back_block.curr_ptr)
 	{
-		controller = {{}, {}, {}};
+		controller = {};
 		return;
 	}
 	auto front_controller_ptr{fromcontroller.front_block.controller_ptr};
@@ -901,9 +1002,9 @@ inline constexpr void deque_clone_trivial_impl(dequecontroltype &controller, deq
 	{
 		auto destit{controller.front_block.controller_ptr};
 		auto pos{fromcontroller.front_block.curr_ptr - fromcontroller.front_block.begin_ptr};
-		controller.front_block.end_ptr =
+		controller.front_end_ptr =
 			::fast_io::freestanding::non_overlapped_copy(fromcontroller.front_block.curr_ptr,
-														 fromcontroller.front_block.end_ptr,
+														 fromcontroller.front_end_ptr,
 														 (controller.front_block.curr_ptr =
 															  pos + controller.front_block.begin_ptr));
 		++destit;
@@ -929,6 +1030,12 @@ inline constexpr void deque_clone_trivial_common(dequecontroltype &controller, d
 
 } // namespace details
 
+template <::std::forward_iterator ForwardIt>
+inline constexpr ForwardIt rotate_for_fast_io_deque(ForwardIt first, ForwardIt middle, ForwardIt last) noexcept
+{
+	return ::std::rotate(first, middle, last);
+}
+
 template <typename T, typename allocator>
 class deque FAST_IO_TRIVIALLY_RELOCATABLE_IF_ELIGIBLE
 {
@@ -951,7 +1058,7 @@ public:
 	controller_type controller;
 	static inline constexpr size_type block_size{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
 	inline constexpr deque() noexcept
-		: controller{{}, {}, {}}
+		: controller{}
 	{}
 
 	inline constexpr deque(deque const &other) noexcept(::std::is_nothrow_copy_constructible_v<value_type>)
@@ -967,13 +1074,13 @@ public:
 		deque temp(other);
 		destroy_deque_controller(this->controller);
 		this->controller = temp.controller;
-		temp.controller = {{}, {}, {}};
+		temp.controller = {};
 		return *this;
 	}
 
 	inline constexpr deque(deque &&other) noexcept : controller(other.controller)
 	{
-		other.controller = {{}, {}, {}};
+		other.controller = {};
 	}
 	inline constexpr deque &operator=(deque &&other) noexcept
 	{
@@ -983,7 +1090,7 @@ public:
 		}
 		destroy_deque_controller(this->controller);
 		this->controller = other.controller;
-		other.controller = {{}, {}, {}};
+		other.controller = {};
 		return *this;
 	}
 
@@ -1024,7 +1131,7 @@ private:
 		{
 			if (fromcontroller.front_block.curr_ptr == fromcontroller.back_block.curr_ptr)
 			{
-				this->controller = {{}, {}, {}};
+				this->controller = {};
 				return;
 			}
 
@@ -1038,6 +1145,8 @@ private:
 			run_destroy destroyer(__builtin_addressof(this->controller));
 			auto dq_back_backup{this->controller.back_block};
 			this->controller.back_block = this->controller.front_block;
+			auto dq_back_end_ptr_backup{this->controller.back_end_ptr};
+			this->controller.back_end_ptr = this->controller.front_end_ptr;
 			pointer lastblockbegin;
 			if (front_controller_ptr == back_controller_ptr)
 			{
@@ -1049,17 +1158,19 @@ private:
 				auto pos{fromcontroller.front_block.curr_ptr - fromcontroller.front_block.begin_ptr};
 				::fast_io::freestanding::uninitialized_copy(
 					fromcontroller.front_block.curr_ptr,
-					fromcontroller.front_block.end_ptr,
+					fromcontroller.front_end_ptr,
 					(controller.front_block.curr_ptr =
 						 pos + controller.front_block.begin_ptr));
-				this->controller.back_block.curr_ptr = controller.front_block.end_ptr =
+				this->controller.back_block.curr_ptr = controller.front_end_ptr =
 					controller.front_block.begin_ptr + block_size;
 				++destit;
 				for (pointer *it{front_controller_ptr + 1}, *ed{back_controller_ptr}; it != ed; ++it)
 				{
 					pointer blockptr{*it};
 					::fast_io::freestanding::uninitialized_copy_n(blockptr, block_size, *destit);
-					this->controller.back_block = {destit, blockptr, blockptr, blockptr + block_size};
+					auto new_curr_ptr{blockptr + block_size};
+					this->controller.back_block = {blockptr, new_curr_ptr, destit};
+					this->controller.back_end_ptr = new_curr_ptr;
 					++destit;
 				}
 				lastblockbegin = fromcontroller.back_block.begin_ptr;
@@ -1070,6 +1181,7 @@ private:
 															fromcontroller.back_block.curr_ptr, dq_back_backup.begin_ptr);
 
 			this->controller.back_block = dq_back_backup;
+			this->controller.back_end_ptr = dq_back_end_ptr_backup;
 			destroyer.thiscontroller = nullptr;
 		}
 	}
@@ -1077,11 +1189,13 @@ private:
 	{
 		run_destroy des(__builtin_addressof(this->controller));
 
-		auto dq_back_backup{controller.back_block};
-		controller.back_block = controller.front_block;
-
 		auto front_controller_ptr{controller.front_block.controller_ptr};
 		auto back_controller_ptr{controller.back_block.controller_ptr};
+
+		auto dq_back_backup{controller.back_block};
+		controller.back_block = controller.front_block;
+		auto dq_back_end_ptr_backup{controller.back_end_ptr};
+		controller.back_end_ptr = controller.back_begin_ptr;
 
 		T *lastblockbegin;
 		if (front_controller_ptr == back_controller_ptr)
@@ -1090,18 +1204,21 @@ private:
 		}
 		else
 		{
-			::fast_io::freestanding::uninitialized_default_construct(controller.front_block.curr_ptr, controller.front_block.end_ptr);
-			this->controller.back_block.curr_ptr = this->controller.back_block.end_ptr;
+			::fast_io::freestanding::uninitialized_default_construct(controller.front_block.curr_ptr, controller.front_end_ptr);
+			this->controller.back_block.curr_ptr = this->controller.back_end_ptr;
 			for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
 			{
 				T *blockptr{*it};
 				::fast_io::freestanding::uninitialized_default_construct(blockptr, blockptr + block_size);
-				this->controller.back_block = {it, blockptr, blockptr + block_size, blockptr + block_size};
+				auto new_curr_ptr{blockptr + block_size};
+				this->controller.back_block = {blockptr, new_curr_ptr, it};
+				this->controller.back_end_ptr = new_curr_ptr;
 			}
 			lastblockbegin = dq_back_backup.begin_ptr;
 		}
 		::fast_io::freestanding::uninitialized_default_construct(lastblockbegin, dq_back_backup.curr_ptr);
 		this->controller.back_block = dq_back_backup;
+		this->controller.back_end_ptr = dq_back_end_ptr_backup;
 		des.thiscontroller = nullptr;
 	}
 
@@ -1152,7 +1269,7 @@ private:
 	{
 		if (first == last)
 		{
-			controller = {{}, {}, {}};
+			controller = {};
 			return;
 		}
 		run_destroy des(__builtin_addressof(this->controller));
@@ -1161,11 +1278,12 @@ private:
 			auto const dist{::std::ranges::distance(first, last)};
 
 			this->init_blocks_common<false>(static_cast<::std::size_t>(dist));
-
-			auto dq_back_backup{this->controller.back_block};
 			auto front_controller_ptr{controller.front_block.controller_ptr};
 			auto back_controller_ptr{controller.back_block.controller_ptr};
+			auto dq_back_backup{this->controller.back_block};
 			this->controller.back_block = this->controller.front_block;
+			auto dq_back_end_ptr_backup{controller.back_end_ptr};
+			controller.back_end_ptr = controller.front_end_ptr;
 
 			T *lastblockbegin;
 			if (front_controller_ptr == back_controller_ptr)
@@ -1178,7 +1296,9 @@ private:
 				{
 					T *blockptr{*it};
 					first = ::fast_io::containers::details::uninitialized_copy_n_for_deque(first, block_size, blockptr).from;
-					this->controller.back_block = {it, blockptr, blockptr + block_size, blockptr + block_size};
+					auto new_curr_ptr{blockptr + block_size};
+					this->controller.back_block = {blockptr, new_curr_ptr, it};
+					this->controller.back_end_ptr = new_curr_ptr;
 				}
 				lastblockbegin = dq_back_backup.begin_ptr;
 			}
@@ -1187,10 +1307,11 @@ private:
 				static_cast<::std::size_t>(dq_back_backup.curr_ptr - lastblockbegin),
 				lastblockbegin);
 			this->controller.back_block = dq_back_backup;
+			this->controller.back_end_ptr = dq_back_end_ptr_backup;
 		}
 		else
 		{
-			controller = {{}, {}, {}};
+			this->controller = {};
 			for (; first != last; ++first)
 			{
 				this->push_back(*first);
@@ -1222,7 +1343,7 @@ private:
 		}
 		else
 		{
-			::std::destroy(controller.front_block.curr_ptr, controller.front_block.end_ptr);
+			::std::destroy(controller.front_block.curr_ptr, controller.front_end_ptr);
 			for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
 			{
 				T *blockptr{*it};
@@ -1279,12 +1400,12 @@ private:
 		{
 			return;
 		}
-		controller.front_block.end_ptr = (controller.front_block.curr_ptr = controller.front_block.begin_ptr = *(controller.front_block.controller_ptr = front_controller_ptr + 1)) + block_size;
+		controller.front_end_ptr = (controller.front_block.curr_ptr = controller.front_block.begin_ptr = *(controller.front_block.controller_ptr = front_controller_ptr + 1)) + block_size;
 	}
 
 	inline constexpr void back_backspace() noexcept
 	{
-		controller.back_block.curr_ptr = (controller.back_block.end_ptr = ((controller.back_block.begin_ptr = *--controller.back_block.controller_ptr) + block_size));
+		controller.back_block.curr_ptr = (controller.back_end_ptr = ((controller.back_block.begin_ptr = *--controller.back_block.controller_ptr) + block_size));
 	}
 
 public:
@@ -1307,7 +1428,7 @@ public:
 		requires ::std::constructible_from<value_type, Args...>
 	inline constexpr reference emplace_back(Args &&...args) noexcept(::std::is_nothrow_constructible_v<value_type, Args...>)
 	{
-		if (controller.back_block.curr_ptr == controller.back_block.end_ptr) [[unlikely]]
+		if (controller.back_block.curr_ptr == controller.back_end_ptr) [[unlikely]]
 		{
 			grow_back();
 		}
@@ -1395,11 +1516,11 @@ private:
 			{
 				auto &frontblock{this->thisdeq->front_block};
 				if (frontblock.curr_ptr ==
-						frontblock.end_ptr &&
+						this->thisdeq->front_end_ptr &&
 					frontblock.controller_ptr !=
 						this->thisdeq->back_block.controller_ptr)
 				{
-					frontblock.end_ptr = ((frontblock.curr_ptr = frontblock.begin_ptr = *(++frontblock.controller_ptr)) + block_size);
+					this->thisdeq->front_end_ptr = ((frontblock.curr_ptr = frontblock.begin_ptr = *(++frontblock.controller_ptr)) + block_size);
 				}
 			}
 		}
@@ -1455,7 +1576,7 @@ public:
 			::std::destroy_at(controller.front_block.curr_ptr);
 		}
 
-		if (++controller.front_block.curr_ptr == controller.front_block.end_ptr) [[unlikely]]
+		if (++controller.front_block.curr_ptr == controller.front_end_ptr) [[unlikely]]
 		{
 			this->front_backspace();
 		}
@@ -1497,10 +1618,7 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr const_reference operator[](size_type index) const noexcept
@@ -1509,35 +1627,28 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr reference index_unchecked(size_type index) noexcept
 	{
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr const_reference index_unchecked(size_type index) const noexcept
 	{
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	static inline constexpr size_type max_size() noexcept
 	{
-		constexpr size_type mxval{SIZE_MAX / sizeof(value_type)};
+		constexpr size_type mxval{::std::numeric_limits<::std::size_t>::max() / sizeof(value_type)};
 		return mxval;
 	}
 
 	static inline constexpr size_type max_size_bytes() noexcept
 	{
-		constexpr size_type mxval{SIZE_MAX / sizeof(value_type) * sizeof(value_type)};
+		constexpr size_type mxval{::std::numeric_limits<::std::size_t>::max() / sizeof(value_type) * sizeof(value_type)};
 		return mxval;
 	}
 
@@ -1585,16 +1696,11 @@ private:
 	inline constexpr ::fast_io::containers::details::deque_control_block<value_type> end_common() noexcept
 	{
 		::fast_io::containers::details::deque_control_block<value_type> backblock{this->controller.back_block};
-		if (backblock.curr_ptr == backblock.end_ptr) [[unlikely]]
+		if (backblock.curr_ptr == this->controller.back_end_ptr) [[unlikely]]
 		{
 			if (backblock.controller_ptr) [[likely]]
 			{
-				auto tmp{backblock.curr_ptr = backblock.begin_ptr = (*++backblock.controller_ptr)};
-				if (tmp) [[likely]]
-				{
-					tmp += block_size;
-				}
-				backblock.end_ptr = tmp;
+				backblock.curr_ptr = backblock.begin_ptr = (*++backblock.controller_ptr);
 			}
 		}
 		return {backblock};
@@ -1603,11 +1709,11 @@ private:
 	inline constexpr ::fast_io::containers::details::deque_control_block<value_type> end_common() const noexcept
 	{
 		::fast_io::containers::details::deque_control_block<value_type> backblock{this->controller.back_block};
-		if (backblock.curr_ptr == backblock.end_ptr) [[unlikely]]
+		if (backblock.curr_ptr == this->controller.back_end_ptr) [[unlikely]]
 		{
 			if (backblock.controller_ptr) [[likely]]
 			{
-				backblock.end_ptr = ((backblock.curr_ptr = backblock.begin_ptr = (*++backblock.controller_ptr)) + block_size);
+				backblock.curr_ptr = backblock.begin_ptr = (*++backblock.controller_ptr);
 			}
 		}
 		return {backblock};
@@ -1657,8 +1763,100 @@ public:
 	inline constexpr void clear_destroy() noexcept
 	{
 		destroy_deque_controller(this->controller);
-		this->controller = {{}, {}, {}};
+		this->controller = {};
 	}
+
+private:
+	struct insert_range_result
+	{
+		size_type pos;
+		iterator it;
+	};
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		size_type const halfold_size{old_size >> 1u};
+#if 0
+		if constexpr(::std::ranges::sized_range<R>)
+		{
+			size_type const rgsize{::std::ranges::size(rg)};
+		}
+		else
+#endif
+		{
+			size_type retpos;
+			iterator retit, rotfirst, rotmid, rotlast;
+			if (pos < halfold_size)
+			{
+				this->prepend_range(rg);
+				size_type const new_size{this->size()};
+				size_type const inserted{new_size - old_size};
+				auto bg{this->begin()};
+				size_type newpos{pos + inserted};
+				rotfirst = bg;
+				rotmid = bg + inserted;
+				retpos = newpos;
+				retit = rotlast = bg + newpos;
+			}
+			else
+			{
+				this->append_range(rg);
+				auto bg{this->begin()};
+				rotfirst = retit = bg + pos;
+				rotmid = bg + old_size;
+				rotlast = this->end();
+				retpos = pos;
+			}
+			::fast_io::containers::rotate_for_fast_io_deque(rotfirst, rotmid, rotlast);
+			return {retpos, retit};
+		}
+	}
+
+public:
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr iterator insert_range(const_iterator pos, R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		return this->insert_range_impl(
+					   ::fast_io::containers::details::deque_iter_difference_unsigned_common(pos, this->cbegin()), rg, this->size())
+			.it;
+	}
+
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr size_type insert_range_index(size_type pos, R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		size_type const n{this->size()};
+		if (n < pos) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		return this->insert_range_impl(pos, rg, n).pos;
+	}
+
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr void append_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		// To do: cleanup code
+		for (auto &e : rg)
+		{
+			this->push_back(e);
+		}
+	}
+
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr void prepend_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		// To do: cleanup code
+		for (auto &e : rg)
+		{
+			this->push_front(e);
+		}
+	}
+
 
 	inline constexpr ~deque()
 	{
