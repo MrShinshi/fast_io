@@ -1282,7 +1282,7 @@ private:
 			auto dq_back_backup{this->controller.back_block};
 			this->controller.back_block = this->controller.front_block;
 			auto dq_back_end_ptr_backup{controller.back_end_ptr};
-			controller.back_end_ptr = controller.back_begin_ptr;
+			controller.back_end_ptr = controller.front_end_ptr;
 
 			auto front_controller_ptr{controller.front_block.controller_ptr};
 			auto back_controller_ptr{controller.back_block.controller_ptr};
