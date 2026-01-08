@@ -77,6 +77,136 @@ struct
 	::fast_io::containers::details::deque_controller_block_common controller_block;
 };
 
+template <typename T>
+#if __has_cpp_attribute(clang::no_sanitize)
+[[clang::no_sanitize("undefined")]]
+#endif
+inline constexpr void deque_add_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type unsignedpos{static_cast<size_type>(pos)};
+	auto curr_ptr{itercontent.curr_ptr};
+	auto controllerptr{itercontent.controller_ptr};
+	decltype(curr_ptr) beginptr;
+	if (pos < 0)
+	{
+		size_type diff{static_cast<size_type>(itercontent.end_ptr - curr_ptr)};
+		constexpr size_type zero{};
+		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
+		diff += abspos;
+		itercontent.curr_ptr = (beginptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+	}
+	else
+	{
+		size_type diff{static_cast<size_type>(curr_ptr - itercontent.begin_ptr)};
+		diff += unsignedpos;
+		itercontent.curr_ptr = (beginptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+	}
+	itercontent.controller_ptr = controllerptr;
+	itercontent.begin_ptr = beginptr;
+	itercontent.end_ptr = beginptr + blocksize;
+}
+
+template <typename T>
+#if __has_cpp_attribute(clang::no_sanitize)
+[[clang::no_sanitize("undefined")]]
+#endif
+inline constexpr void deque_add_assign_unsigned_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+
+	size_type diff{static_cast<size_type>(itercontent.end_ptr - itercontent.curr_ptr) + unsignedpos};
+	auto beginptr{*(itercontent.controller_ptr += diff / blocksize)};
+	itercontent.begin_ptr = beginptr;
+	itercontent.curr_ptr = beginptr + diff % blocksize;
+	itercontent.end_ptr = beginptr + blocksize;
+}
+
+template <typename T>
+#if __has_cpp_attribute(clang::no_sanitize)
+[[clang::no_sanitize("undefined")]]
+#endif
+inline constexpr void deque_sub_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type unsignedpos{static_cast<size_type>(pos)};
+	auto curr_ptr{itercontent.curr_ptr};
+	auto controllerptr{itercontent.controller_ptr};
+	decltype(curr_ptr) beginptr;
+	if (pos < 0)
+	{
+		size_type diff{static_cast<size_type>(curr_ptr - itercontent.begin_ptr)};
+		constexpr size_type zero{};
+		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
+		diff += abspos;
+		itercontent.curr_ptr = (beginptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+	}
+	else
+	{
+		size_type diff{static_cast<size_type>(itercontent.end_ptr - curr_ptr)};
+		diff += unsignedpos;
+		itercontent.curr_ptr = (beginptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+	}
+	itercontent.controller_ptr = controllerptr;
+	itercontent.begin_ptr = beginptr;
+	itercontent.end_ptr = beginptr + blocksize;
+}
+
+template <typename T>
+#if __has_cpp_attribute(clang::no_sanitize)
+[[clang::no_sanitize("undefined")]]
+#endif
+inline constexpr void deque_sub_assign_unsigned_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type diff{static_cast<size_type>(itercontent.end_ptr - itercontent.curr_ptr) + unsignedpos};
+	auto beginptr{*(itercontent.controller_ptr -= diff / blocksize)};
+	itercontent.begin_ptr = beginptr;
+	itercontent.curr_ptr = beginptr + (blocksizem1 - diff % blocksize);
+	itercontent.end_ptr = beginptr + blocksize;
+}
+
+template <typename T>
+inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr size_type blocksizem1{blocksize - 1u};
+	size_type unsignedpos{static_cast<size_type>(pos)};
+	auto curr_ptr{itercontent.curr_ptr};
+	auto controllerptr{itercontent.controller_ptr};
+	if (pos < 0)
+	{
+		size_type diff{static_cast<size_type>(itercontent.end_ptr - curr_ptr) - 1u};
+		constexpr size_type zero{};
+		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
+		diff += abspos;
+		return (*(controllerptr - diff / blocksize))[blocksizem1 - diff % blocksize];
+	}
+	else
+	{
+		size_type diff{static_cast<size_type>(curr_ptr - itercontent.begin_ptr)};
+		diff += unsignedpos;
+		return controllerptr[diff / blocksize][diff % blocksize];
+	}
+}
+
+template <typename T>
+inline constexpr T &deque_index_unsigned(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	size_type const diff{static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr) + unsignedpos};
+	return itercontent.controller_ptr[diff / blocksize][diff % blocksize];
+}
+
 template <typename T, bool isconst>
 struct deque_iterator
 {
@@ -155,83 +285,48 @@ struct deque_iterator
 	{
 		return this->itercontent.curr_ptr;
 	}
-
-	inline constexpr deque_iterator &operator+=(difference_type pos) noexcept
+	template <::std::integral postype>
+	inline constexpr deque_iterator &operator+=(postype pos) noexcept
 	{
-		constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-		constexpr size_type blocksizem1{blocksize - 1u};
-		size_type unsignedpos{static_cast<size_type>(pos)};
-		auto curr_ptr{this->itercontent.curr_ptr};
-		auto controllerptr{this->itercontent.controller_ptr};
-		decltype(curr_ptr) beginptr;
-		if (pos < 0)
+		if constexpr (::std::signed_integral<postype>)
 		{
-			size_type diff{static_cast<size_type>(this->itercontent.end_ptr - curr_ptr)};
-			constexpr size_type zero{};
-			size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-			diff += abspos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+			::fast_io::containers::details::deque_add_assign_signed_impl(
+				this->itercontent, static_cast<difference_type>(pos));
 		}
 		else
 		{
-			size_type diff{static_cast<size_type>(curr_ptr - this->itercontent.begin_ptr)};
-			diff += unsignedpos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+			::fast_io::containers::details::deque_add_assign_unsigned_impl(
+				this->itercontent, static_cast<size_type>(pos));
 		}
-		this->itercontent.controller_ptr = controllerptr;
-		this->itercontent.begin_ptr = beginptr;
-		this->itercontent.end_ptr = beginptr + blocksize;
 		return *this;
 	}
-
-	inline constexpr deque_iterator &operator-=(difference_type pos) noexcept
+	template <::std::integral postype>
+	inline constexpr deque_iterator &operator-=(postype pos) noexcept
 	{
-		constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-		constexpr size_type blocksizem1{blocksize - 1u};
-		size_type unsignedpos{static_cast<size_type>(pos)};
-		auto curr_ptr{this->itercontent.curr_ptr};
-		auto controllerptr{this->itercontent.controller_ptr};
-		decltype(curr_ptr) beginptr;
-		if (pos < 0)
+		if constexpr (::std::signed_integral<postype>)
 		{
-			size_type diff{static_cast<size_type>(curr_ptr - this->itercontent.begin_ptr)};
-			constexpr size_type zero{};
-			size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-			diff += abspos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+			::fast_io::containers::details::deque_sub_assign_signed_impl(
+				this->itercontent, static_cast<difference_type>(pos));
 		}
 		else
 		{
-			size_type diff{static_cast<size_type>(this->itercontent.end_ptr - curr_ptr)};
-			diff += unsignedpos;
-			this->itercontent.curr_ptr = (beginptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+			::fast_io::containers::details::deque_sub_assign_unsigned_impl(
+				this->itercontent, static_cast<size_type>(pos));
 		}
-		this->itercontent.controller_ptr = controllerptr;
-		this->itercontent.begin_ptr = beginptr;
-		this->itercontent.end_ptr = beginptr + blocksize;
 		return *this;
 	}
-
-	inline constexpr reference operator[](difference_type pos) const noexcept
+	template <::std::integral postype>
+	inline constexpr reference operator[](postype pos) const noexcept
 	{
-		constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(value_type)>};
-		constexpr size_type blocksizem1{blocksize - 1u};
-		size_type unsignedpos{static_cast<size_type>(pos)};
-		auto curr_ptr{this->itercontent.curr_ptr};
-		auto controllerptr{this->itercontent.controller_ptr};
-		if (pos < 0)
+		if constexpr (::std::signed_integral<postype>)
 		{
-			size_type diff{static_cast<size_type>(this->itercontent.end_ptr - curr_ptr) - 1u};
-			constexpr size_type zero{};
-			size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-			diff += abspos;
-			return (*(controllerptr - diff / blocksize))[blocksizem1 - diff % blocksize];
+			return ::fast_io::containers::details::deque_index_signed(this->itercontent,
+																	  static_cast<difference_type>(pos));
 		}
 		else
 		{
-			size_type diff{static_cast<size_type>(curr_ptr - this->itercontent.begin_ptr)};
-			diff += unsignedpos;
-			return controllerptr[diff / blocksize][diff % blocksize];
+			return ::fast_io::containers::details::deque_index_unsigned(this->itercontent,
+																		static_cast<size_type>(pos));
 		}
 	}
 
@@ -242,22 +337,52 @@ struct deque_iterator
 	}
 };
 
-template <typename T, bool isconst>
-inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(::fast_io::containers::details::deque_iterator<T, isconst> a, ::std::ptrdiff_t pos) noexcept
+template <typename T, bool isconst, ::std::integral postype>
+inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(::fast_io::containers::details::deque_iterator<T, isconst> a, postype pos) noexcept
 {
-	return (a += pos);
+	if constexpr (::std::signed_integral<postype>)
+	{
+		::fast_io::containers::details::deque_add_assign_signed_impl(
+			a.itercontent, static_cast<::std::ptrdiff_t>(pos));
+	}
+	else
+	{
+		::fast_io::containers::details::deque_add_assign_unsigned_impl(
+			a.itercontent, static_cast<::std::size_t>(pos));
+	}
+	return a;
 }
 
-template <typename T, bool isconst>
-inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(::std::ptrdiff_t pos, ::fast_io::containers::details::deque_iterator<T, isconst> a) noexcept
+template <typename T, bool isconst, ::std::integral postype>
+inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator+(postype pos, ::fast_io::containers::details::deque_iterator<T, isconst> a) noexcept
 {
-	return (a += pos);
+	if constexpr (::std::signed_integral<postype>)
+	{
+		::fast_io::containers::details::deque_add_assign_signed_impl(
+			a.itercontent, static_cast<::std::ptrdiff_t>(pos));
+	}
+	else
+	{
+		::fast_io::containers::details::deque_add_assign_unsigned_impl(
+			a.itercontent, static_cast<::std::size_t>(pos));
+	}
+	return a;
 }
 
-template <typename T, bool isconst>
-inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator-(::fast_io::containers::details::deque_iterator<T, isconst> a, ::std::ptrdiff_t pos) noexcept
+template <typename T, bool isconst, ::std::integral postype>
+inline constexpr ::fast_io::containers::details::deque_iterator<T, isconst> operator-(::fast_io::containers::details::deque_iterator<T, isconst> a, postype pos) noexcept
 {
-	return (a -= pos);
+	if constexpr (::std::signed_integral<postype>)
+	{
+		::fast_io::containers::details::deque_sub_assign_signed_impl(
+			a.itercontent, static_cast<::std::ptrdiff_t>(pos));
+	}
+	else
+	{
+		::fast_io::containers::details::deque_sub_assign_unsigned_impl(
+			a.itercontent, static_cast<::std::size_t>(pos));
+	}
+	return a;
 }
 
 template <typename T>
@@ -266,6 +391,14 @@ inline constexpr ::std::ptrdiff_t deque_iter_difference_common(::fast_io::contai
 	::std::ptrdiff_t controllerdiff{a.controller_ptr - b.controller_ptr};
 	constexpr ::std::ptrdiff_t blocksizedf{static_cast<::std::ptrdiff_t>(::fast_io::containers::details::deque_block_size<sizeof(T)>)};
 	return controllerdiff * blocksizedf + (a.curr_ptr - b.begin_ptr) + (b.begin_ptr - b.curr_ptr);
+}
+
+template <typename T>
+inline constexpr ::std::size_t deque_iter_difference_unsigned_common(::fast_io::containers::details::deque_control_block<T> const &a, ::fast_io::containers::details::deque_control_block<T> const &b) noexcept
+{
+	::std::size_t controllerdiff{a.controller_ptr - b.controller_ptr};
+	constexpr ::std::size_t blocksizedf{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	return controllerdiff * blocksizedf + static_cast<::std::size_t>((a.curr_ptr - b.begin_ptr) + (b.begin_ptr - b.curr_ptr));
 }
 
 template <typename T, bool isconst1, bool isconst2>
@@ -929,6 +1062,12 @@ inline constexpr void deque_clone_trivial_common(dequecontroltype &controller, d
 
 } // namespace details
 
+template <::std::forward_iterator ForwardIt>
+inline constexpr ForwardIt rotate_for_fast_io_deque(ForwardIt first, ForwardIt middle, ForwardIt last) noexcept
+{
+	return ::std::rotate(first, middle, last);
+}
+
 template <typename T, typename allocator>
 class deque FAST_IO_TRIVIALLY_RELOCATABLE_IF_ELIGIBLE
 {
@@ -1497,10 +1636,7 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr const_reference operator[](size_type index) const noexcept
@@ -1509,35 +1645,28 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr reference index_unchecked(size_type index) noexcept
 	{
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr const_reference index_unchecked(size_type index) const noexcept
 	{
-		size_type real_index{static_cast<size_type>(controller.front_block.curr_ptr - controller.front_block.begin_ptr) + index};
-
-		return controller.front_block.controller_ptr[real_index / block_size][real_index % block_size];
+		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
 	}
 
 	static inline constexpr size_type max_size() noexcept
 	{
-		constexpr size_type mxval{SIZE_MAX / sizeof(value_type)};
+		constexpr size_type mxval{::std::numeric_limits<::std::size_t>::max() / sizeof(value_type)};
 		return mxval;
 	}
 
 	static inline constexpr size_type max_size_bytes() noexcept
 	{
-		constexpr size_type mxval{SIZE_MAX / sizeof(value_type) * sizeof(value_type)};
+		constexpr size_type mxval{::std::numeric_limits<::std::size_t>::max() / sizeof(value_type) * sizeof(value_type)};
 		return mxval;
 	}
 
@@ -1659,6 +1788,98 @@ public:
 		destroy_deque_controller(this->controller);
 		this->controller = {{}, {}, {}};
 	}
+
+private:
+	struct insert_range_result
+	{
+		size_type pos;
+		iterator it;
+	};
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		size_type const halfold_size{old_size >> 1u};
+#if 0
+		if constexpr(::std::ranges::sized_range<R>)
+		{
+			size_type const rgsize{::std::ranges::size(rg)};
+		}
+		else
+#endif
+		{
+			size_type retpos;
+			iterator retit, rotfirst, rotmid, rotlast;
+			if (pos < halfold_size)
+			{
+				this->prepend_range(rg);
+				size_type const new_size{this->size()};
+				size_type const inserted{new_size - old_size};
+				auto bg{this->begin()};
+				size_type newpos{pos + inserted};
+				rotfirst = bg;
+				rotmid = bg + inserted;
+				retpos = newpos;
+				retit = rotlast = bg + newpos;
+			}
+			else
+			{
+				this->append_range(rg);
+				auto bg{this->begin()};
+				rotfirst = retit = bg + pos;
+				rotmid = bg + old_size;
+				rotlast = this->end();
+				retpos = pos;
+			}
+			::fast_io::containers::rotate_for_fast_io_deque(rotfirst, rotmid, rotlast);
+			return {retpos, retit};
+		}
+	}
+
+public:
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr iterator insert_range(const_iterator pos, R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		return this->insert_range_impl(
+					   ::fast_io::containers::details::deque_iter_difference_unsigned_common(pos, this->cbegin()), rg, this->size())
+			.it;
+	}
+
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr size_type insert_range_index(size_type pos, R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		size_type const n{this->size()};
+		if (n < pos) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		return this->insert_range_impl(pos, rg, n).pos;
+	}
+
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr void append_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		// To do: cleanup code
+		for (auto &e : rg)
+		{
+			this->push_back(e);
+		}
+	}
+
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr void prepend_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		// To do: cleanup code
+		for (auto &e : rg)
+		{
+			this->push_front(e);
+		}
+	}
+
 
 	inline constexpr ~deque()
 	{
