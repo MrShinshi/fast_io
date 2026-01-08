@@ -222,7 +222,7 @@ struct deque_iterator
 
 	inline constexpr deque_iterator &operator--() noexcept
 	{
-		if (itercontent.curr_ptr == itercontent.begin_ptr) [[unlikely]]
+		if (itercontent.begin_ptr == itercontent.curr_ptr) [[unlikely]]
 		{
 			itercontent.curr_ptr = (itercontent.begin_ptr = (*--itercontent.controller_ptr)) + ::fast_io::containers::details::deque_block_size<sizeof(value_type)>;
 		}
@@ -1145,6 +1145,8 @@ private:
 			run_destroy destroyer(__builtin_addressof(this->controller));
 			auto dq_back_backup{this->controller.back_block};
 			this->controller.back_block = this->controller.front_block;
+			auto dq_back_end_ptr_backup{this->controller.back_end_ptr};
+			this->controller.back_end_ptr = this->controller.front_end_ptr;
 			pointer lastblockbegin;
 			if (front_controller_ptr == back_controller_ptr)
 			{
@@ -1166,7 +1168,9 @@ private:
 				{
 					pointer blockptr{*it};
 					::fast_io::freestanding::uninitialized_copy_n(blockptr, block_size, *destit);
-					this->controller.back_block = {destit, blockptr, blockptr, blockptr + block_size};
+					auto new_curr_ptr{blockptr + block_size};
+					this->controller.back_block = {blockptr, new_curr_ptr, destit};
+					this->controller.back_end_ptr = new_curr_ptr;
 					++destit;
 				}
 				lastblockbegin = fromcontroller.back_block.begin_ptr;
@@ -1177,6 +1181,7 @@ private:
 															fromcontroller.back_block.curr_ptr, dq_back_backup.begin_ptr);
 
 			this->controller.back_block = dq_back_backup;
+			this->controller.back_end_ptr = dq_back_end_ptr_backup;
 			destroyer.thiscontroller = nullptr;
 		}
 	}
@@ -1186,6 +1191,8 @@ private:
 
 		auto dq_back_backup{controller.back_block};
 		controller.back_block = controller.front_block;
+		auto dq_back_end_ptr_backup{controller.back_end_ptr};
+		controller.back_end_ptr = controller.back_begin_ptr;
 
 		auto front_controller_ptr{controller.front_block.controller_ptr};
 		auto back_controller_ptr{controller.back_block.controller_ptr};
@@ -1203,12 +1210,15 @@ private:
 			{
 				T *blockptr{*it};
 				::fast_io::freestanding::uninitialized_default_construct(blockptr, blockptr + block_size);
-				this->controller.back_block = {it, blockptr, blockptr + block_size, blockptr + block_size};
+				auto new_curr_ptr{blockptr + block_size};
+				this->controller.back_block = {blockptr, new_curr_ptr, it};
+				this->controller.back_end_ptr = new_curr_ptr;
 			}
 			lastblockbegin = dq_back_backup.begin_ptr;
 		}
 		::fast_io::freestanding::uninitialized_default_construct(lastblockbegin, dq_back_backup.curr_ptr);
 		this->controller.back_block = dq_back_backup;
+		this->controller.back_end_ptr = dq_back_end_ptr_backup;
 		des.thiscontroller = nullptr;
 	}
 
@@ -1270,9 +1280,12 @@ private:
 			this->init_blocks_common<false>(static_cast<::std::size_t>(dist));
 
 			auto dq_back_backup{this->controller.back_block};
+			this->controller.back_block = this->controller.front_block;
+			auto dq_back_end_ptr_backup{controller.back_end_ptr};
+			controller.back_end_ptr = controller.back_begin_ptr;
+
 			auto front_controller_ptr{controller.front_block.controller_ptr};
 			auto back_controller_ptr{controller.back_block.controller_ptr};
-			this->controller.back_block = this->controller.front_block;
 
 			T *lastblockbegin;
 			if (front_controller_ptr == back_controller_ptr)
@@ -1285,7 +1298,9 @@ private:
 				{
 					T *blockptr{*it};
 					first = ::fast_io::containers::details::uninitialized_copy_n_for_deque(first, block_size, blockptr).from;
-					this->controller.back_block = {it, blockptr, blockptr + block_size, blockptr + block_size};
+					auto new_curr_ptr{blockptr + block_size};
+					this->controller.back_block = {blockptr, new_curr_ptr, it};
+					this->controller.back_end_ptr = new_curr_ptr;
 				}
 				lastblockbegin = dq_back_backup.begin_ptr;
 			}
@@ -1294,6 +1309,7 @@ private:
 				static_cast<::std::size_t>(dq_back_backup.curr_ptr - lastblockbegin),
 				lastblockbegin);
 			this->controller.back_block = dq_back_backup;
+			this->controller.back_end_ptr = dq_back_end_ptr_backup;
 		}
 		else
 		{
