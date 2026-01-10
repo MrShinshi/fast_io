@@ -358,7 +358,7 @@ inline constexpr ::std::ptrdiff_t deque_iter_difference_common(::fast_io::contai
 {
 	::std::ptrdiff_t controllerdiff{a.controller_ptr - b.controller_ptr};
 	constexpr ::std::ptrdiff_t blocksizedf{static_cast<::std::ptrdiff_t>(::fast_io::containers::details::deque_block_size<sizeof(T)>)};
-	return controllerdiff * blocksizedf + (a.curr_ptr - b.begin_ptr) + (b.begin_ptr - b.curr_ptr);
+	return controllerdiff * blocksizedf + (a.curr_ptr - a.begin_ptr) + (b.begin_ptr - b.curr_ptr);
 }
 
 template <typename T>
@@ -366,7 +366,7 @@ inline constexpr ::std::size_t deque_iter_difference_unsigned_common(::fast_io::
 {
 	::std::size_t controllerdiff{a.controller_ptr - b.controller_ptr};
 	constexpr ::std::size_t blocksizedf{::fast_io::containers::details::deque_block_size<sizeof(T)>};
-	return controllerdiff * blocksizedf + static_cast<::std::size_t>((a.curr_ptr - b.begin_ptr) + (b.begin_ptr - b.curr_ptr));
+	return controllerdiff * blocksizedf + static_cast<::std::size_t>((a.curr_ptr - a.begin_ptr) + (b.begin_ptr - b.curr_ptr));
 }
 
 template <typename T, bool isconst1, bool isconst2>
@@ -1776,8 +1776,8 @@ private:
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
 	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
-		size_type const halfold_size{old_size >> 1u};
 #if 0
+		size_type const halfold_size{old_size >> 1u};
 		if constexpr(::std::ranges::sized_range<R>)
 		{
 			size_type const rgsize{::std::ranges::size(rg)};
@@ -1785,31 +1785,13 @@ private:
 		else
 #endif
 		{
-			size_type retpos;
-			iterator retit, rotfirst, rotmid, rotlast;
-			if (pos < halfold_size)
-			{
-				this->prepend_range(rg);
-				size_type const new_size{this->size()};
-				size_type const inserted{new_size - old_size};
-				auto bg{this->begin()};
-				size_type newpos{pos + inserted};
-				rotfirst = bg;
-				rotmid = bg + inserted;
-				retpos = newpos;
-				retit = rotlast = bg + newpos;
-			}
-			else
-			{
-				this->append_range(rg);
-				auto bg{this->begin()};
-				rotfirst = retit = bg + pos;
-				rotmid = bg + old_size;
-				rotlast = this->end();
-				retpos = pos;
-			}
+			this->append_range(rg);
+			auto bg{this->begin()};
+			iterator rotfirst = bg + pos;
+			iterator rotmid = bg + old_size;
+			iterator rotlast = this->end();
 			::fast_io::containers::rotate_for_fast_io_deque(rotfirst, rotmid, rotlast);
-			return {retpos, retit};
+			return {pos, rotfirst};
 		}
 	}
 
@@ -1845,18 +1827,28 @@ public:
 			this->push_back(e);
 		}
 	}
-
+#if 0
+private:
+	template <::std::ranges::range R>
+		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
+	inline constexpr size_type prepend_range_impl(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	{
+		size_type const old_size{this->size()};
+		for (auto &e : rg)
+		{
+			this->push_front(e);
+		}
+		return this->size() - old_size;
+	}
+public:
 	template <::std::ranges::range R>
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
 	inline constexpr void prepend_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
 		// To do: cleanup code
-		for (auto &e : rg)
-		{
-			this->push_front(e);
-		}
+		this->prepend_range_impl(::std::forward<R>(rg));
 	}
-
+#endif
 
 	inline constexpr ~deque()
 	{

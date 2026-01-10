@@ -196,16 +196,16 @@ inline void test_insert_range_index()
 	}
 
 	// Helper to compare dq and ref
-	auto check_equal = [&](auto const &msg) {
+	auto check_equal = [&](auto const &msg, ::std::source_location src = ::std::source_location::current()) {
 		if (dq.size() != ref.size())
 		{
-			::fast_io::io::panicln("ERROR: size mismatch: ", msg);
+			::fast_io::io::panicln(src, "\tERROR: size mismatch: ", msg);
 		}
 		for (::std::size_t i{}; i != dq.size(); ++i)
 		{
 			if (dq[i] != ref[i])
 			{
-				::fast_io::io::panicln("ERROR: value mismatch at index ", i, " : ", msg);
+				::fast_io::io::panicln(src, "\tERROR: value mismatch at index ", i, "\tdq[i]=", dq[i], "\tref[i]=", ref[i], " : ", msg);
 			}
 		}
 	};
@@ -257,7 +257,7 @@ inline void test_insert_range_index()
 int main()
 {
 	test_iterator_ops();
-#if 0
-    test_insert_range_index();
+#if 1
+	test_insert_range_index();
 #endif
 }
