@@ -1693,19 +1693,6 @@ public:
 	}
 
 private:
-	inline constexpr ::fast_io::containers::details::deque_control_block<value_type> end_common() noexcept
-	{
-		::fast_io::containers::details::deque_control_block<value_type> backblock{this->controller.back_block};
-		if (backblock.curr_ptr == this->controller.back_end_ptr) [[unlikely]]
-		{
-			if (backblock.controller_ptr) [[likely]]
-			{
-				backblock.curr_ptr = backblock.begin_ptr = (*++backblock.controller_ptr);
-			}
-		}
-		return {backblock};
-	}
-
 	inline constexpr ::fast_io::containers::details::deque_control_block<value_type> end_common() const noexcept
 	{
 		::fast_io::containers::details::deque_control_block<value_type> backblock{this->controller.back_block};
