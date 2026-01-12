@@ -1850,6 +1850,23 @@ public:
 	}
 #endif
 
+#if 0
+	inline constexpr iterator erase(const_iterator from, const_iterator to) noexcept
+	{
+
+	}
+
+	inline constexpr size_type erase_index(size_type fromidx, size_type toidx) noexcept
+	{
+		size_type const n{this->size()};
+		if (n < fromidx || n < todix) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		return fromidx;
+	}
+#endif
+
 	inline constexpr ~deque()
 	{
 		destroy_deque_controller(this->controller);
