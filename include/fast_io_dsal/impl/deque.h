@@ -1332,6 +1332,33 @@ private:
 			::fast_io::containers::details::deque_init_space_common<allocator, alignof(value_type), sizeof(value_type), block_size, iszeroconstr>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(controller)), n);
 		}
 	}
+	inline static constexpr void destroy_elements_range(
+		::fast_io::containers::details::deque_control_block<value_type> const &first,
+		::fast_io::containers::details::deque_control_block<value_type> const &last) noexcept
+	{
+		if constexpr (!::std::is_trivially_destructible_v<value_type>)
+		{
+			auto front_controller_ptr{first.controller_ptr};
+			auto back_controller_ptr{last.controller_ptr};
+			T *lastblockbegin;
+			if (front_controller_ptr == back_controller_ptr)
+			{
+				lastblockbegin = first.curr_ptr;
+			}
+			else
+			{
+				::std::destroy(first.curr_ptr, first.begin_ptr + block_size);
+				for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
+				{
+					T *blockptr{*it};
+					::std::destroy(blockptr, blockptr + block_size);
+				}
+				lastblockbegin = last.begin_ptr;
+			}
+			::std::destroy(lastblockbegin, last.curr_ptr);
+		}
+	}
+
 	inline static constexpr void destroy_all_elements(controller_type &controller) noexcept
 	{
 		auto front_controller_ptr{controller.front_block.controller_ptr};
@@ -1837,22 +1864,124 @@ public:
 	}
 #endif
 
-#if 0
-	inline constexpr iterator erase(const_iterator from, const_iterator to) noexcept
+private:
+	inline constexpr iterator erase_unchecked_impl(iterator first, iterator last, bool moveleft) noexcept
 	{
+		if constexpr (!::std::is_trivially_destructible_v<value_type>)
+		{
+			destroy_elements_range(first, last);
+		}
+#if 0
+		if constexpr(::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
+		{
+//Todo
+		}
+		else
+#endif
+		{
+			if (moveleft)
+			{
+				this->controller.front_block = ::fast_io::freestanding::uninitialized_relocate_backward(this->begin(), first, last).itercontent;
+				return last;
+			}
+			else
+			{
+				auto back_block{::fast_io::freestanding::uninitialized_relocate(last, this->end(), first).itercontent};
+				if (back_block.begin_ptr == back_block.curr_ptr)
+				{
+					if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
+					{
+						back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
+					}
+				}
+				this->controller.back_block = back_block;
+				return first;
+			}
+		}
+	}
+	inline constexpr iterator erase_unchecked_single_impl(iterator pos, bool moveleft) noexcept
+	{
+		if constexpr (!::std::is_trivially_destructible_v<value_type>)
+		{
+			::std::destroy(pos.itercontent.curr_ptr);
+		}
+#if 0
+		if constexpr(::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
+		{
+//Todo
+		}
+		else
+#endif
+		{
+			auto posp1{pos};
+			++posp1;
+			if (moveleft)
+			{
+				this->controller.front_block = ::fast_io::freestanding::uninitialized_relocate_backward(this->begin(), pos, posp1).itercontent;
+				return posp1;
+			}
+			else
+			{
+				::fast_io::io::perrln(::std::source_location::current(),"\t",::fast_io::mnp::pointervw(posp1.itercontent.controller_ptr),
+					" \tposp1=", ::fast_io::mnp::pointervw(posp1.itercontent.controller_ptr), " \tthis->end()=",
+					::fast_io::mnp::pointervw(this->end().itercontent.begin_ptr));
+				auto back_block{::fast_io::freestanding::uninitialized_relocate(posp1, this->end(), pos).itercontent};
+				::fast_io::io::perrln(::std::source_location::current());
 
+				if (back_block.begin_ptr == back_block.curr_ptr)
+				{
+					if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
+					{
+						back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
+					}
+				}
+				this->controller.back_block = back_block;
+				return pos;
+			}
+		}
 	}
 
-	inline constexpr size_type erase_index(size_type fromidx, size_type toidx) noexcept
+public:
+	inline constexpr iterator erase(const_iterator first, const_iterator last) noexcept
+	{
+		return this->erase_unchecked_impl(iterator{first.itercontent},
+										  iterator{last.itercontent},
+										  static_cast<size_type>(first - this->cbegin()) <
+											  static_cast<size_type>(this->cend() - last));
+	}
+
+	inline constexpr size_type erase_index(size_type firstidx, size_type lastidx) noexcept
 	{
 		size_type const n{this->size()};
-		if (n < fromidx || n < todix) [[unlikely]]
+		if (n < firstidx || n < lastidx) [[unlikely]]
 		{
 			::fast_io::fast_terminate();
 		}
-		return fromidx;
+		auto bg{this->begin()};
+		this->erase_unchecked_impl(bg + firstidx, bg + lastidx, firstidx < (n - lastidx));
+		return firstidx;
 	}
-#endif
+
+	inline constexpr iterator erase(const_iterator first) noexcept
+	{
+		auto firstp1{first};
+		++firstp1;
+		return this->erase_unchecked_single_impl(iterator{first.itercontent},
+												 static_cast<size_type>(first - this->cbegin()) <
+													 static_cast<size_type>(this->cend() - firstp1));
+	}
+
+	inline constexpr size_type erase_index(size_type firstidx) noexcept
+	{
+		size_type const n{this->size()};
+		if (n <= firstidx) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		this->erase_unchecked_single_impl(this->begin() + firstidx,
+										  firstidx < static_cast<size_type>(n - static_cast<size_type>(firstidx + 1u)));
+		return firstidx;
+	}
 
 	inline constexpr ~deque()
 	{
