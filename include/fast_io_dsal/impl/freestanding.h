@@ -78,6 +78,7 @@ inline constexpr Iter2 uninitialized_relocate(Iter1 first, Iter1 last, Iter2 des
 		while (first != last)
 		{
 			::std::construct_at(::std::addressof(*dest), ::std::move(*first));
+
 			if constexpr (!::std::is_trivially_destructible_v<iter1valuetype>)
 			{
 				if constexpr (::std::is_pointer_v<Iter1>)
@@ -175,9 +176,6 @@ inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, 
 		{
 			--last;
 			--dest;
-#if 0
-			__builtin_fprintf(stderr, "%s %d\n", __FILE__, __LINE__);
-#endif
 			::std::construct_at(::std::addressof(*dest), ::std::move(*last));
 
 			if constexpr (!::std::is_trivially_destructible_v<iter1valuetype>)

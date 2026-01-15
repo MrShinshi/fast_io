@@ -1867,6 +1867,10 @@ public:
 private:
 	inline constexpr iterator erase_unchecked_impl(iterator first, iterator last, bool moveleft) noexcept
 	{
+		if (first == last)
+		{
+			return first;
+		}
 		if constexpr (!::std::is_trivially_destructible_v<value_type>)
 		{
 			destroy_elements_range(first, last);
@@ -1879,24 +1883,26 @@ private:
 		else
 #endif
 		{
+			::fast_io::containers::details::deque_control_block<value_type> back_block;
 			if (moveleft)
 			{
 				this->controller.front_block = ::fast_io::freestanding::uninitialized_relocate_backward(this->begin(), first, last).itercontent;
-				return last;
+				first = last;
+				back_block = this->controller.back_block;
 			}
 			else
 			{
-				auto back_block{::fast_io::freestanding::uninitialized_relocate(last, this->end(), first).itercontent};
-				if (back_block.begin_ptr == back_block.curr_ptr)
-				{
-					if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
-					{
-						back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
-					}
-				}
-				this->controller.back_block = back_block;
-				return first;
+				back_block = ::fast_io::freestanding::uninitialized_relocate(last, this->end(), first).itercontent;
 			}
+			if (back_block.begin_ptr == back_block.curr_ptr)
+			{
+				if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
+				{
+					this->controller.back_end_ptr = back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
+				}
+			}
+			this->controller.back_block = back_block;
+			return first;
 		}
 	}
 	inline constexpr iterator erase_unchecked_single_impl(iterator pos, bool moveleft) noexcept
@@ -1913,31 +1919,28 @@ private:
 		else
 #endif
 		{
+			::fast_io::containers::details::deque_control_block<value_type> back_block;
 			auto posp1{pos};
 			++posp1;
 			if (moveleft)
 			{
 				this->controller.front_block = ::fast_io::freestanding::uninitialized_relocate_backward(this->begin(), pos, posp1).itercontent;
-				return posp1;
+				pos = posp1;
+				back_block = this->controller.back_block;
 			}
 			else
 			{
-				::fast_io::io::perrln(::std::source_location::current(),"\t",::fast_io::mnp::pointervw(posp1.itercontent.controller_ptr),
-					" \tposp1=", ::fast_io::mnp::pointervw(posp1.itercontent.controller_ptr), " \tthis->end()=",
-					::fast_io::mnp::pointervw(this->end().itercontent.begin_ptr));
-				auto back_block{::fast_io::freestanding::uninitialized_relocate(posp1, this->end(), pos).itercontent};
-				::fast_io::io::perrln(::std::source_location::current());
-
-				if (back_block.begin_ptr == back_block.curr_ptr)
-				{
-					if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
-					{
-						back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
-					}
-				}
-				this->controller.back_block = back_block;
-				return pos;
+				back_block = ::fast_io::freestanding::uninitialized_relocate(posp1, this->end(), pos).itercontent;
 			}
+			if (back_block.begin_ptr == back_block.curr_ptr)
+			{
+				if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
+				{
+					this->controller.back_end_ptr = back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
+				}
+			}
+			this->controller.back_block = back_block;
+			return pos;
 		}
 	}
 
