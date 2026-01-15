@@ -1048,10 +1048,10 @@ deque_copy_impl(Itercontent first, Itercontent last,
 			firstend = first.begin_ptr + blocksize;
 		}
 		auto firstcurrptr{first.curr_ptr};
-		::std::size_t curr_block_to_end{
+		::std::size_t const curr_block_to_end{
 			static_cast<::std::size_t>(firstend - firstcurrptr)};
 		auto destcurrptr{dest.curr_ptr};
-		::std::size_t dest_block_to_end{
+		::std::size_t const dest_block_to_end{
 			static_cast<::std::size_t>(dest.begin_ptr + blocksize - destcurrptr)};
 		auto cmp{curr_block_to_end <=> dest_block_to_end};
 		::std::size_t tocopy;
@@ -1094,7 +1094,6 @@ inline constexpr Itercontent
 deque_copy_backward_impl(Itercontent first, Itercontent last,
 						 Itercontent dest, ::std::size_t blocksize)
 {
-	::std::size_t const blocksizem1{blocksize - 1u};
 	if (first.curr_ptr == last.curr_ptr)
 	{
 		return dest;
@@ -1111,10 +1110,10 @@ deque_copy_backward_impl(Itercontent first, Itercontent last,
 			lastbegin = last.begin_ptr;
 		}
 		auto lastcurrptr{last.curr_ptr};
-		::std::size_t curr_block_to_begin{
+		::std::size_t const curr_block_to_begin{
 			static_cast<::std::size_t>(lastcurrptr - lastbegin)};
 		auto destcurrptr{dest.curr_ptr};
-		::std::size_t dest_block_to_begin{
+		::std::size_t const dest_block_to_begin{
 			static_cast<::std::size_t>(destcurrptr - dest.begin_ptr)};
 		auto cmp{curr_block_to_begin <=> dest_block_to_begin};
 		::std::size_t tocopy;
@@ -1130,7 +1129,7 @@ deque_copy_backward_impl(Itercontent first, Itercontent last,
 												   destcurrptr - tocopy);
 		if (0 < cmp)
 		{
-			dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksizem1;
+			dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
 			last.curr_ptr -= tocopy;
 		}
 		else
@@ -1142,7 +1141,7 @@ deque_copy_backward_impl(Itercontent first, Itercontent last,
 					dest.curr_ptr = dest.begin_ptr;
 					break;
 				}
-				dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksizem1;
+				dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
 			}
 			else
 			{
@@ -1152,7 +1151,7 @@ deque_copy_backward_impl(Itercontent first, Itercontent last,
 					break;
 				}
 			}
-			last.curr_ptr = (last.begin_ptr = (*--last.controller_ptr)) + blocksizem1;
+			last.curr_ptr = (last.begin_ptr = (*--last.controller_ptr)) + blocksize;
 		}
 	}
 	return dest;
@@ -1165,22 +1164,28 @@ deque_erase_common_trivial_impl(::fast_io::containers::details::deque_controller
 								bool moveleft,
 								::std::size_t blockbytes) noexcept
 {
-	::fast_io::containers::details::deque_control_block_common back_block;
+	::fast_io::containers::details::deque_control_block_common back_block{controller.back_block};
 	if (moveleft)
 	{
 		controller.front_block = ::fast_io::containers::details::deque_copy_backward_impl(controller.front_block, first, last, blockbytes);
 		first = last;
-		back_block = controller.back_block;
 	}
 	else
 	{
-		back_block = ::fast_io::containers::details::deque_copy_impl(last, controller.back_block, first, blockbytes);
+		if (back_block.curr_ptr == controller.back_end_ptr) [[unlikely]]
+		{
+			if (back_block.controller_ptr) [[likely]]
+			{
+				back_block.curr_ptr = back_block.begin_ptr = (*++back_block.controller_ptr);
+			}
+		}
+		back_block = ::fast_io::containers::details::deque_copy_impl(last, back_block, first, blockbytes);
 	}
 	if (back_block.begin_ptr == back_block.curr_ptr)
 	{
 		if (controller.front_block.controller_ptr != back_block.controller_ptr)
 		{
-			back_block.curr_ptr = (back_block.begin_ptr = (*--back_block.controller_ptr));
+			back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + blockbytes);
 		}
 	}
 	controller.back_block = back_block;
@@ -2042,7 +2047,7 @@ private:
 		{
 			if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
 			{
-				this->controller.back_end_ptr = back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
+				back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
 			}
 		}
 		this->controller.back_block = back_block;
@@ -2057,20 +2062,20 @@ private:
 		}
 		if constexpr (!::std::is_trivially_destructible_v<value_type>)
 		{
-			destroy_elements_range(first, last);
+			this->destroy_elements_range(first, last);
 		}
-#if 0
-		if constexpr(::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
+#if 1
+		if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
 		{
 			if !consteval
 			{
-				constexpr size_type blockbytes{block_size*sizeof(value_type)};
+				constexpr size_type blockbytes{block_size * sizeof(value_type)};
 				return ::std::bit_cast<iterator>(
 					::fast_io::containers::details::deque_erase_common_trivial_impl(
-					*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(
-						this->controller)),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent), moveleft, blockbytes));
+						*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(
+							this->controller)),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent), moveleft, blockbytes));
 			}
 		}
 #endif
@@ -2082,26 +2087,26 @@ private:
 		{
 			::std::destroy(pos.itercontent.curr_ptr);
 		}
-#if 0
-		if constexpr(::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
+#if 1
+		if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
 		{
 			if !consteval
 			{
 				auto posp1{pos.itercontent};
-				if (++posp1.curr_ptr  == posp1.begin_ptr + block_size)
+				if (++posp1.curr_ptr == posp1.begin_ptr + block_size)
 				{
 					if (posp1.curr_ptr != this->controller.back_end_ptr)
 					{
 						posp1.curr_ptr = posp1.begin_ptr = *(++posp1.controller_ptr);
 					}
 				}
-				constexpr size_type blockbytes{block_size*sizeof(value_type)};
+				constexpr size_type blockbytes{block_size * sizeof(value_type)};
 				return ::std::bit_cast<iterator>(
 					::fast_io::containers::details::deque_erase_common_trivial_impl(
-					*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(
-						this->controller)),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(pos.itercontent),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(posp1), moveleft, blockbytes));
+						*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(
+							this->controller)),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(pos.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(posp1), moveleft, blockbytes));
 			}
 		}
 #endif
