@@ -1996,14 +1996,51 @@ public:
 		return this->insert_range_impl(pos, rg, n).pos;
 	}
 
+private:
+	template <bool isprepend>
+	struct prepend_or_append_range_guard
+	{
+		deque *thisdeq{};
+		size_type oldn{};
+		constexpr ~prepend_or_append_range_guard()
+		{
+			if (thisdeq)
+			{
+				if constexpr (isprepend)
+				{
+					thisdeq->erase(thisdeq->cbegin(), thisdeq->cend() - oldn);
+				}
+				else
+				{
+					thisdeq->erase(thisdeq->cbegin() + oldn, thisdeq->cend());
+				}
+			}
+		}
+	};
+	using append_range_guard = prepend_or_append_range_guard<false>;
+	using prepend_range_guard = prepend_or_append_range_guard<true>;
+
+public:
 	template <::std::ranges::range R>
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
 	inline constexpr void append_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
 		// To do: cleanup code
-		for (auto &e : rg)
+		if constexpr (::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 		{
-			this->push_back(e);
+			for (auto &e : rg)
+			{
+				this->push_back(e);
+			}
+		}
+		else
+		{
+			append_range_guard guard{this, this->size()};
+			for (auto &e : rg)
+			{
+				this->push_back(e);
+			}
+			guard.thisdeq = nullptr;
 		}
 	}
 #if 0
@@ -2019,15 +2056,37 @@ private:
 		}
 		return this->size() - old_size;
 	}
+#endif
 public:
 	template <::std::ranges::range R>
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
-	inline constexpr void prepend_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	inline constexpr void prepend_range(R &&rg) noexcept(
+		::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>> &&
+		::std::is_nothrow_swappable_v<value_type>)
 	{
 		// To do: cleanup code
-		this->prepend_range_impl(::std::forward<R>(rg));
+		size_type oldn{this->size()};
+		if constexpr (
+			::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>> &&
+			::std::is_nothrow_swappable_v<value_type>)
+		{
+			for (auto &e : rg)
+			{
+				this->push_front(e);
+			}
+			::std::reverse(this->begin(), this->end() - oldn);
+		}
+		else
+		{
+			prepend_range_guard guard{this, oldn};
+			for (auto &e : rg)
+			{
+				this->push_front(e);
+			}
+			::std::reverse(this->begin(), this->end() - oldn);
+			guard.thisdeq = nullptr;
+		}
 	}
-#endif
 
 private:
 	inline constexpr iterator erase_no_destroy_common_impl(iterator first, iterator last, bool moveleft) noexcept
@@ -2064,7 +2123,6 @@ private:
 		{
 			this->destroy_elements_range(first, last);
 		}
-#if 1
 		if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
 		{
 			if !consteval
@@ -2078,7 +2136,6 @@ private:
 						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent), moveleft, blockbytes));
 			}
 		}
-#endif
 		return this->erase_no_destroy_common_impl(first, last, moveleft);
 	}
 	inline constexpr iterator erase_unchecked_single_impl(iterator pos, bool moveleft) noexcept
@@ -2087,7 +2144,6 @@ private:
 		{
 			::std::destroy(pos.itercontent.curr_ptr);
 		}
-#if 1
 		if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
 		{
 			if !consteval
@@ -2109,7 +2165,6 @@ private:
 						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(posp1), moveleft, blockbytes));
 			}
 		}
-#endif
 		auto posp1{pos};
 		++posp1;
 		return this->erase_no_destroy_common_impl(pos, posp1, moveleft);
