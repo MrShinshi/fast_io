@@ -820,7 +820,6 @@ inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexc
 	::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 }
 
-
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_clear_common_impl(dequecontroltype &controller, ::std::size_t blockbytes)
 {
@@ -1026,6 +1025,172 @@ inline constexpr void deque_clone_trivial_common(dequecontroltype &controller, d
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
 	::fast_io::containers::details::deque_clone_trivial_impl<allocator>(controller, fromcontroller, align, blockbytes);
+}
+
+template <typename Itercontent>
+inline constexpr Itercontent
+deque_copy_impl(Itercontent first, Itercontent last,
+				Itercontent dest, ::std::size_t blocksize)
+{
+	if (first.curr_ptr == last.curr_ptr)
+	{
+		return dest;
+	}
+	for (;;)
+	{
+		decltype(first.begin_ptr) firstend;
+		if (first.controller_ptr == last.controller_ptr)
+		{
+			firstend = last.curr_ptr;
+		}
+		else
+		{
+			firstend = first.begin_ptr + blocksize;
+		}
+		auto firstcurrptr{first.curr_ptr};
+		::std::size_t const curr_block_to_end{
+			static_cast<::std::size_t>(firstend - firstcurrptr)};
+		auto destcurrptr{dest.curr_ptr};
+		::std::size_t const dest_block_to_end{
+			static_cast<::std::size_t>(dest.begin_ptr + blocksize - destcurrptr)};
+		auto cmp{curr_block_to_end <=> dest_block_to_end};
+		::std::size_t tocopy;
+		if (cmp < 0)
+		{
+			tocopy = curr_block_to_end;
+		}
+		else
+		{
+			tocopy = dest_block_to_end;
+		}
+		::fast_io::freestanding::overlapped_copy_n(firstcurrptr, tocopy, destcurrptr);
+		if (0 < cmp)
+		{
+			dest.curr_ptr = (dest.begin_ptr = (*++dest.controller_ptr));
+			first.curr_ptr += tocopy;
+		}
+		else
+		{
+			if (cmp < 0)
+			{
+				dest.curr_ptr += tocopy;
+			}
+			else if (cmp == 0)
+			{
+				dest.curr_ptr = (dest.begin_ptr = (*++dest.controller_ptr));
+			}
+			if (first.controller_ptr == last.controller_ptr)
+			{
+				break;
+			}
+			first.curr_ptr = (first.begin_ptr = (*++first.controller_ptr));
+		}
+	}
+	return dest;
+}
+
+template <typename Itercontent>
+inline constexpr Itercontent
+deque_copy_backward_impl(Itercontent first, Itercontent last,
+						 Itercontent dest, ::std::size_t blocksize)
+{
+	if (first.curr_ptr == last.curr_ptr)
+	{
+		return dest;
+	}
+	for (;;)
+	{
+		decltype(first.begin_ptr) lastbegin;
+		if (first.controller_ptr == last.controller_ptr)
+		{
+			lastbegin = first.curr_ptr;
+		}
+		else
+		{
+			lastbegin = last.begin_ptr;
+		}
+		auto lastcurrptr{last.curr_ptr};
+		::std::size_t const curr_block_to_begin{
+			static_cast<::std::size_t>(lastcurrptr - lastbegin)};
+		auto destcurrptr{dest.curr_ptr};
+		::std::size_t const dest_block_to_begin{
+			static_cast<::std::size_t>(destcurrptr - dest.begin_ptr)};
+		auto cmp{curr_block_to_begin <=> dest_block_to_begin};
+		::std::size_t tocopy;
+		if (cmp < 0)
+		{
+			tocopy = curr_block_to_begin;
+		}
+		else
+		{
+			tocopy = dest_block_to_begin;
+		}
+		::fast_io::freestanding::overlapped_copy_n(lastcurrptr - tocopy, tocopy,
+												   destcurrptr - tocopy);
+		if (0 < cmp)
+		{
+			dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
+			last.curr_ptr -= tocopy;
+		}
+		else
+		{
+			if (cmp == 0)
+			{
+				if (last.controller_ptr == first.controller_ptr)
+				{
+					dest.curr_ptr = dest.begin_ptr;
+					break;
+				}
+				dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
+			}
+			else
+			{
+				dest.curr_ptr -= tocopy;
+				if (last.controller_ptr == first.controller_ptr)
+				{
+					break;
+				}
+			}
+			last.curr_ptr = (last.begin_ptr = (*--last.controller_ptr)) + blocksize;
+		}
+	}
+	return dest;
+}
+
+inline ::fast_io::containers::details::deque_control_block_common
+deque_erase_common_trivial_impl(::fast_io::containers::details::deque_controller_common &controller,
+								::fast_io::containers::details::deque_control_block_common first,
+								::fast_io::containers::details::deque_control_block_common last,
+								bool moveleft,
+								::std::size_t blockbytes) noexcept
+{
+	::fast_io::containers::details::deque_control_block_common back_block{controller.back_block};
+	if (moveleft)
+	{
+		controller.front_block = ::fast_io::containers::details::deque_copy_backward_impl(controller.front_block, first, last, blockbytes);
+		first = last;
+	}
+	else
+	{
+		if (back_block.curr_ptr == controller.back_end_ptr) [[unlikely]]
+		{
+			if (back_block.controller_ptr) [[likely]]
+			{
+				back_block.curr_ptr = back_block.begin_ptr = (*++back_block.controller_ptr);
+			}
+		}
+		back_block = ::fast_io::containers::details::deque_copy_impl(last, back_block, first, blockbytes);
+	}
+	if (back_block.begin_ptr == back_block.curr_ptr)
+	{
+		if (controller.front_block.controller_ptr != back_block.controller_ptr)
+		{
+			back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + blockbytes);
+		}
+	}
+	controller.back_block = back_block;
+	controller.back_end_ptr = back_block.begin_ptr + blockbytes;
+	return first;
 }
 
 } // namespace details
@@ -1332,6 +1497,33 @@ private:
 			::fast_io::containers::details::deque_init_space_common<allocator, alignof(value_type), sizeof(value_type), block_size, iszeroconstr>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(controller)), n);
 		}
 	}
+	inline static constexpr void destroy_elements_range(
+		::fast_io::containers::details::deque_control_block<value_type> const &first,
+		::fast_io::containers::details::deque_control_block<value_type> const &last) noexcept
+	{
+		if constexpr (!::std::is_trivially_destructible_v<value_type>)
+		{
+			auto front_controller_ptr{first.controller_ptr};
+			auto back_controller_ptr{last.controller_ptr};
+			T *lastblockbegin;
+			if (front_controller_ptr == back_controller_ptr)
+			{
+				lastblockbegin = first.curr_ptr;
+			}
+			else
+			{
+				::std::destroy(first.curr_ptr, first.begin_ptr + block_size);
+				for (T **it{front_controller_ptr + 1}, **ed{back_controller_ptr}; it != ed; ++it)
+				{
+					T *blockptr{*it};
+					::std::destroy(blockptr, blockptr + block_size);
+				}
+				lastblockbegin = last.begin_ptr;
+			}
+			::std::destroy(lastblockbegin, last.curr_ptr);
+		}
+	}
+
 	inline static constexpr void destroy_all_elements(controller_type &controller) noexcept
 	{
 		auto front_controller_ptr{controller.front_block.controller_ptr};
@@ -1693,19 +1885,6 @@ public:
 	}
 
 private:
-	inline constexpr ::fast_io::containers::details::deque_control_block<value_type> end_common() noexcept
-	{
-		::fast_io::containers::details::deque_control_block<value_type> backblock{this->controller.back_block};
-		if (backblock.curr_ptr == this->controller.back_end_ptr) [[unlikely]]
-		{
-			if (backblock.controller_ptr) [[likely]]
-			{
-				backblock.curr_ptr = backblock.begin_ptr = (*++backblock.controller_ptr);
-			}
-		}
-		return {backblock};
-	}
-
 	inline constexpr ::fast_io::containers::details::deque_control_block<value_type> end_common() const noexcept
 	{
 		::fast_io::containers::details::deque_control_block<value_type> backblock{this->controller.back_block};
@@ -1817,14 +1996,51 @@ public:
 		return this->insert_range_impl(pos, rg, n).pos;
 	}
 
+private:
+	template <bool isprepend>
+	struct prepend_or_append_range_guard
+	{
+		deque *thisdeq{};
+		size_type oldn{};
+		constexpr ~prepend_or_append_range_guard()
+		{
+			if (thisdeq)
+			{
+				if constexpr (isprepend)
+				{
+					thisdeq->erase(thisdeq->cbegin(), thisdeq->cend() - oldn);
+				}
+				else
+				{
+					thisdeq->erase(thisdeq->cbegin() + oldn, thisdeq->cend());
+				}
+			}
+		}
+	};
+	using append_range_guard = prepend_or_append_range_guard<false>;
+	using prepend_range_guard = prepend_or_append_range_guard<true>;
+
+public:
 	template <::std::ranges::range R>
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
 	inline constexpr void append_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
 		// To do: cleanup code
-		for (auto &e : rg)
+		if constexpr (::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 		{
-			this->push_back(e);
+			for (auto &e : rg)
+			{
+				this->push_back(e);
+			}
+		}
+		else
+		{
+			append_range_guard guard{this, this->size()};
+			for (auto &e : rg)
+			{
+				this->push_back(e);
+			}
+			guard.thisdeq = nullptr;
 		}
 	}
 #if 0
@@ -1840,15 +2056,161 @@ private:
 		}
 		return this->size() - old_size;
 	}
+#endif
 public:
 	template <::std::ranges::range R>
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
-	inline constexpr void prepend_range(R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
+	inline constexpr void prepend_range(R &&rg) noexcept(
+		::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>> &&
+		::std::is_nothrow_swappable_v<value_type>)
 	{
 		// To do: cleanup code
-		this->prepend_range_impl(::std::forward<R>(rg));
+		size_type oldn{this->size()};
+		if constexpr (
+			::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>> &&
+			::std::is_nothrow_swappable_v<value_type>)
+		{
+			for (auto &e : rg)
+			{
+				this->push_front(e);
+			}
+			::std::reverse(this->begin(), this->end() - oldn);
+		}
+		else
+		{
+			prepend_range_guard guard{this, oldn};
+			for (auto &e : rg)
+			{
+				this->push_front(e);
+			}
+			::std::reverse(this->begin(), this->end() - oldn);
+			guard.thisdeq = nullptr;
+		}
 	}
-#endif
+
+private:
+	inline constexpr iterator erase_no_destroy_common_impl(iterator first, iterator last, bool moveleft) noexcept
+	{
+		::fast_io::containers::details::deque_control_block<value_type> back_block;
+		if (moveleft)
+		{
+			this->controller.front_block = ::fast_io::freestanding::uninitialized_relocate_backward(this->begin(), first, last).itercontent;
+			first = last;
+			back_block = this->controller.back_block;
+		}
+		else
+		{
+			back_block = ::fast_io::freestanding::uninitialized_relocate(last, this->end(), first).itercontent;
+		}
+		if (back_block.begin_ptr == back_block.curr_ptr)
+		{
+			if (this->controller.front_block.controller_ptr != back_block.controller_ptr)
+			{
+				back_block.curr_ptr = ((back_block.begin_ptr = (*--back_block.controller_ptr)) + block_size);
+			}
+		}
+		this->controller.back_block = back_block;
+		this->controller.back_end_ptr = back_block.begin_ptr + block_size;
+		return first;
+	}
+	inline constexpr iterator erase_unchecked_impl(iterator first, iterator last, bool moveleft) noexcept
+	{
+		if (first == last)
+		{
+			return first;
+		}
+		if constexpr (!::std::is_trivially_destructible_v<value_type>)
+		{
+			this->destroy_elements_range(first, last);
+		}
+		if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
+		{
+			if !consteval
+			{
+				constexpr size_type blockbytes{block_size * sizeof(value_type)};
+				return ::std::bit_cast<iterator>(
+					::fast_io::containers::details::deque_erase_common_trivial_impl(
+						*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(
+							this->controller)),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent), moveleft, blockbytes));
+			}
+		}
+		return this->erase_no_destroy_common_impl(first, last, moveleft);
+	}
+	inline constexpr iterator erase_unchecked_single_impl(iterator pos, bool moveleft) noexcept
+	{
+		if constexpr (!::std::is_trivially_destructible_v<value_type>)
+		{
+			::std::destroy(pos.itercontent.curr_ptr);
+		}
+		if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<value_type>)
+		{
+			if !consteval
+			{
+				auto posp1{pos.itercontent};
+				if (++posp1.curr_ptr == posp1.begin_ptr + block_size)
+				{
+					if (posp1.curr_ptr != this->controller.back_end_ptr)
+					{
+						posp1.curr_ptr = posp1.begin_ptr = *(++posp1.controller_ptr);
+					}
+				}
+				constexpr size_type blockbytes{block_size * sizeof(value_type)};
+				return ::std::bit_cast<iterator>(
+					::fast_io::containers::details::deque_erase_common_trivial_impl(
+						*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(__builtin_addressof(
+							this->controller)),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(pos.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(posp1), moveleft, blockbytes));
+			}
+		}
+		auto posp1{pos};
+		++posp1;
+		return this->erase_no_destroy_common_impl(pos, posp1, moveleft);
+	}
+
+public:
+	inline constexpr iterator erase(const_iterator first, const_iterator last) noexcept
+	{
+		return this->erase_unchecked_impl(iterator{first.itercontent},
+										  iterator{last.itercontent},
+										  static_cast<size_type>(first - this->cbegin()) <
+											  static_cast<size_type>(this->cend() - last));
+	}
+
+	inline constexpr size_type erase_index(size_type firstidx, size_type lastidx) noexcept
+	{
+		size_type const n{this->size()};
+		if (n < firstidx || n < lastidx) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		auto bg{this->begin()};
+		this->erase_unchecked_impl(bg + firstidx, bg + lastidx, firstidx < (n - lastidx));
+		return firstidx;
+	}
+
+	inline constexpr iterator erase(const_iterator first) noexcept
+	{
+		auto firstp1{first};
+		++firstp1;
+		return this->erase_unchecked_single_impl(iterator{first.itercontent},
+												 static_cast<size_type>(first - this->cbegin()) <
+													 static_cast<size_type>(this->cend() - firstp1));
+	}
+
+	inline constexpr size_type erase_index(size_type firstidx) noexcept
+	{
+		size_type const n{this->size()};
+		if (n <= firstidx) [[unlikely]]
+		{
+			::fast_io::fast_terminate();
+		}
+		this->erase_unchecked_single_impl(this->begin() + firstidx,
+										  firstidx < static_cast<size_type>(n - static_cast<size_type>(firstidx + 1u)));
+		return firstidx;
+	}
 
 	inline constexpr ~deque()
 	{
