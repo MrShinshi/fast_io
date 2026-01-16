@@ -307,10 +307,205 @@ inline void test_erase_index()
 	::fast_io::io::print("deque erase_index test finished\n");
 }
 
+inline void test_erase_value()
+{
+	::fast_io::io::perr("=== deque erase(value) test ===\n");
+
+	using T = ::std::size_t;
+	::fast_io::deque<T> dq;
+	::std::deque<T> ref;
+
+	// Fill initial data with repeated patterns
+	for (::std::size_t i{}; i != 300u; ++i)
+	{
+		dq.push_back(i % 10);
+		ref.push_back(i % 10);
+	}
+
+	auto check_equal = [&](auto const &msg,
+						   ::std::source_location src = ::std::source_location::current()) {
+		if (dq.size() != ref.size())
+		{
+			::fast_io::io::panicln(src, "size mismatch: ", msg);
+		}
+
+		for (::std::size_t i{}; i != dq.size(); ++i)
+		{
+			if (dq[i] != ref[i])
+			{
+				::fast_io::io::panicln(src, "value mismatch at ", i, " : ", msg);
+			}
+		}
+	};
+
+	// 1. Erase a value that appears many times
+	{
+		auto r1 = erase(dq, static_cast<T>(3));
+		auto r2 = std::erase(ref, static_cast<T>(3));
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase(value) count mismatch");
+		}
+		check_equal("erase(value) many occurrences");
+	}
+
+	// 2. Erase a value that appears once
+	{
+		dq.push_back(12345);
+		ref.push_back(12345);
+
+		auto r1 = erase(dq, static_cast<T>(12345));
+		auto r2 = std::erase(ref, static_cast<T>(12345));
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase(value) count mismatch (single)");
+		}
+		check_equal("erase(value) single occurrence");
+	}
+
+	// 3. Erase a value that does not exist
+	{
+		auto r1 = erase(dq, static_cast<T>(99999));
+		auto r2 = std::erase(ref, static_cast<T>(99999));
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase(value) count mismatch (none)");
+		}
+		check_equal("erase(value) none");
+	}
+
+	// 4. Randomized erase(value)
+	for (std::size_t iter{}; iter != 200u; ++iter)
+	{
+		if (dq.empty())
+		{
+			break;
+		}
+
+		std::size_t val = iter % 15;
+
+		auto r1 = erase(dq, static_cast<T>(val));
+		auto r2 = std::erase(ref, static_cast<T>(val));
+
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase(value) randomized count mismatch");
+		}
+
+		check_equal("erase(value) randomized");
+	}
+
+	::fast_io::io::print("deque erase(value) test finished\n");
+}
+
+inline void test_erase_if()
+{
+	::fast_io::io::perr("=== deque erase_if(pred) test ===\n");
+
+	using T = ::std::size_t;
+	::fast_io::deque<T> dq;
+	::std::deque<T> ref;
+
+	// Fill initial data
+	for (::std::size_t i{}; i != 300u; ++i)
+	{
+		dq.push_back(i);
+		ref.push_back(i);
+	}
+
+	auto check_equal = [&](auto const &msg,
+						   ::std::source_location src = ::std::source_location::current()) {
+		if (dq.size() != ref.size())
+		{
+			::fast_io::io::panicln(src, "size mismatch: ", msg);
+		}
+
+		for (::std::size_t i{}; i != dq.size(); ++i)
+		{
+			if (dq[i] != ref[i])
+			{
+				::fast_io::io::panicln(src, "value mismatch at ", i, " : ", msg);
+			}
+		}
+	};
+
+	// 1. Remove even numbers
+	{
+		auto pred = [](T x) { return (x % 2) == 0; };
+
+		auto r1 = erase_if(dq, pred);
+		auto r2 = std::erase_if(ref, pred);
+
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase_if(pred) count mismatch (even)");
+		}
+
+		check_equal("erase_if even");
+	}
+
+	// 2. Remove numbers divisible by 3
+	{
+		auto pred = [](T x) { return (x % 3) == 0; };
+
+		auto r1 = erase_if(dq, pred);
+		auto r2 = std::erase_if(ref, pred);
+
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase_if(pred) count mismatch (div3)");
+		}
+
+		check_equal("erase_if divisible by 3");
+	}
+
+	// 3. Remove nothing
+	{
+		auto pred = [](T x) { return x == static_cast<T>(999999); };
+
+		auto r1 = erase_if(dq, pred);
+		auto r2 = std::erase_if(ref, pred);
+
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase_if(pred) count mismatch (none)");
+		}
+
+		check_equal("erase_if none");
+	}
+
+	// 4. Randomized erase_if
+	for (std::size_t iter{}; iter != 200u; ++iter)
+	{
+		if (dq.empty())
+		{
+			break;
+		}
+
+		std::size_t mod = (iter % 7) + 2;
+
+		auto pred = [&](T x) { return (x % mod) == 1; };
+
+		auto r1 = erase_if(dq, pred);
+		auto r2 = std::erase_if(ref, pred);
+
+		if (r1 != r2)
+		{
+			::fast_io::io::panicln("erase_if(pred) randomized count mismatch");
+		}
+
+		check_equal("erase_if randomized");
+	}
+
+	::fast_io::io::print("deque erase_if(pred) test finished\n");
+}
+
 } // namespace
 
 int main()
 {
 	test_erase();
 	test_erase_index();
+	test_erase_value();
+	test_erase_if();
 }

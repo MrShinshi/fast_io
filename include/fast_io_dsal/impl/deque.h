@@ -364,7 +364,7 @@ inline constexpr ::std::ptrdiff_t deque_iter_difference_common(::fast_io::contai
 template <typename T>
 inline constexpr ::std::size_t deque_iter_difference_unsigned_common(::fast_io::containers::details::deque_control_block<T> const &a, ::fast_io::containers::details::deque_control_block<T> const &b) noexcept
 {
-	::std::size_t controllerdiff{a.controller_ptr - b.controller_ptr};
+	::std::size_t controllerdiff{static_cast<::std::size_t>(a.controller_ptr - b.controller_ptr)};
 	constexpr ::std::size_t blocksizedf{::fast_io::containers::details::deque_block_size<sizeof(T)>};
 	return controllerdiff * blocksizedf + static_cast<::std::size_t>((a.curr_ptr - a.begin_ptr) + (b.begin_ptr - b.curr_ptr));
 }
@@ -2235,6 +2235,28 @@ inline constexpr auto operator<=>(deque<T, allocator1> const &lhs, deque<T, allo
 }
 
 #endif
+
+template <typename T, typename Alloc, typename U = T>
+constexpr typename ::fast_io::containers::deque<T, Alloc>::size_type
+erase(::fast_io::containers::deque<T, Alloc> &c, U const &value)
+{
+	auto ed{c.end()};
+	auto it = ::std::remove(c.begin(), ed, value);
+	auto r = ::fast_io::containers::details::deque_iter_difference_unsigned_common(ed.itercontent, it.itercontent);
+	c.erase(it, ed);
+	return r;
+}
+
+template <typename T, typename Alloc, typename Pred>
+constexpr typename ::fast_io::containers::deque<T, Alloc>::size_type
+erase_if(::fast_io::containers::deque<T, Alloc> &c, Pred pred)
+{
+	auto ed{c.end()};
+	auto it = ::std::remove_if(c.begin(), ed, pred);
+	auto r = ::fast_io::containers::details::deque_iter_difference_unsigned_common(ed.itercontent, it.itercontent);
+	c.erase(it, ed);
+	return r;
+}
 
 } // namespace containers
 
