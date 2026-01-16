@@ -3,7 +3,7 @@
 namespace fast_io
 {
 
-struct linux_struct_statx
+struct linux_statxbuf
 {
 	::std::uint_least32_t stx_mask;       /* Mask of bits indicating
 							   filled fields */
