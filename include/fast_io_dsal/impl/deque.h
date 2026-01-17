@@ -1956,21 +1956,47 @@ private:
 	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
 #if 0
-		size_type const halfold_size{old_size >> 1u};
 		if constexpr(::std::ranges::sized_range<R>)
 		{
 			size_type const rgsize{::std::ranges::size(rg)};
+			size_type const half_size{old_size >> 1u};
+			if (pos < half_size)
+			{
+				
+			}
+			else
+			{
+			}
 		}
 		else
 #endif
 		{
-			this->append_range(rg);
-			auto bg{this->begin()};
-			iterator rotfirst = bg + pos;
-			iterator rotmid = bg + old_size;
-			iterator rotlast = this->end();
+			size_type const quarterold_size{old_size >> 2u};
+			size_type retpos;
+			iterator retit, rotfirst, rotmid, rotlast;
+			if (pos < quarterold_size)
+			{
+				this->prepend_range(rg);
+				size_type const new_size{this->size()};
+				size_type const inserted{new_size - old_size};
+				auto bg{this->begin()};
+				size_type newpos{pos + inserted};
+				rotfirst = bg;
+				rotmid = bg + inserted;
+				retpos = newpos;
+				retit = rotlast = bg + newpos;
+			}
+			else
+			{
+				this->append_range(rg);
+				auto bg{this->begin()};
+				rotfirst = retit = bg + pos;
+				rotmid = bg + old_size;
+				rotlast = this->end();
+				retpos = pos;
+			}
 			::fast_io::containers::rotate_for_fast_io_deque(rotfirst, rotmid, rotlast);
-			return {pos, rotfirst};
+			return {retpos, retit};
 		}
 	}
 
