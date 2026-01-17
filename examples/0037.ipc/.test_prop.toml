@@ -1,7 +1,0 @@
-["win32_named_pipe"]
-interactive = true
-platform = "windows"
-
-["nt_alpc"]
-ignore = true
-platform = "windows"

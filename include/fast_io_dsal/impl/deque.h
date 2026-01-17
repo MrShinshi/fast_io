@@ -564,11 +564,16 @@ inline constexpr void deque_rebalance_or_grow_2x_after_blocks_impl(dequecontrolt
 }
 
 template <typename allocator, typename dequecontroltype>
-inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes) noexcept
+inline constexpr void deque_allocate_on_empty_common_with_n_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes,
+																 ::std::size_t initial_allocated_block_counts) noexcept
 {
+	constexpr ::std::size_t maxval{::std::numeric_limits<::std::size_t>::max()};
+	if (initial_allocated_block_counts == maxval) [[unlikely]]
+	{
+		::fast_io::fast_terminate();
+	}
+	::std::size_t initial_allocated_block_counts_with_sentinel{initial_allocated_block_counts + 1u};
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
-	constexpr ::std::size_t initial_allocated_block_counts{3};
-	constexpr ::std::size_t initial_allocated_block_counts_with_sentinel{initial_allocated_block_counts + 1u};
 	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(initial_allocated_block_counts_with_sentinel);
 	// we need a null terminator as sentinel like c style string does
 	--allocated_blocks_count;
@@ -594,6 +599,13 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 	auto halfposptr{begin_ptr + halfsize};
 	front_block.curr_ptr = halfposptr;
 	back_block.curr_ptr = halfposptr;
+}
+
+template <typename allocator, typename dequecontroltype>
+inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes) noexcept
+{
+	constexpr ::std::size_t initial_allocated_block_counts{3};
+	::fast_io::containers::details::deque_allocate_on_empty_common_with_n_impl<allocator>(controller, align, bytes, initial_allocated_block_counts);
 }
 
 template <typename allocator, typename dequecontroltype>
@@ -1192,6 +1204,28 @@ deque_erase_common_trivial_impl(::fast_io::containers::details::deque_controller
 	controller.back_end_ptr = back_block.begin_ptr + blockbytes;
 	return first;
 }
+
+#if 0
+template <typename allocator, typename dequecontroltype>
+inline constexpr void deque_reserve_back_spaces_impl(dequecontroltype &controller, ::std::size_t n, ::std::size_t align, ::std::size_t blockbytes) noexcept
+{
+	::std::size_t const nb{n/blockbytes};
+
+	if (controller.controller_block.controller_start_ptr == nullptr)
+	{
+		::fast_io::containers::details::deque_allocate_on_empty_common_with_n_impl<allocator>(
+			controller, align, blockbytes, nb);
+		return;
+	}
+	
+}
+
+template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
+inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::std::size_t n)
+{
+
+}
+#endif
 
 } // namespace details
 
@@ -1956,21 +1990,47 @@ private:
 	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
 #if 0
-		size_type const halfold_size{old_size >> 1u};
 		if constexpr(::std::ranges::sized_range<R>)
 		{
 			size_type const rgsize{::std::ranges::size(rg)};
+			size_type const half_size{old_size >> 1u};
+			if (pos < half_size)
+			{
+				
+			}
+			else
+			{
+			}
 		}
 		else
 #endif
 		{
-			this->append_range(rg);
-			auto bg{this->begin()};
-			iterator rotfirst = bg + pos;
-			iterator rotmid = bg + old_size;
-			iterator rotlast = this->end();
+			size_type const quarterold_size{old_size >> 2u};
+			size_type retpos;
+			iterator retit, rotfirst, rotmid, rotlast;
+			if (pos < quarterold_size)
+			{
+				this->prepend_range(rg);
+				size_type const new_size{this->size()};
+				size_type const inserted{new_size - old_size};
+				auto bg{this->begin()};
+				size_type newpos{pos + inserted};
+				rotfirst = bg;
+				rotmid = bg + inserted;
+				retpos = newpos;
+				retit = rotlast = bg + newpos;
+			}
+			else
+			{
+				this->append_range(rg);
+				auto bg{this->begin()};
+				rotfirst = retit = bg + pos;
+				rotmid = bg + old_size;
+				rotlast = this->end();
+				retpos = pos;
+			}
 			::fast_io::containers::rotate_for_fast_io_deque(rotfirst, rotmid, rotlast);
-			return {pos, rotfirst};
+			return {retpos, retit};
 		}
 	}
 
