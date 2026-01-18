@@ -436,7 +436,23 @@ inline constexpr void deque_grow_to_new_blocks_count_impl(dequecontroltype &cont
 	::std::size_t const old_back_block_ptr_pos{static_cast<::std::size_t>(controller.back_block.controller_ptr - old_start_ptr)};
 
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
-	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least + 1zu);
+
+#if (defined(__GNUC__) || defined(__clang__))
+	::std::size_t new_blocks_count_least_p1;
+	if (__builtin_add_overflow(new_blocks_count_least, 1zu, __builtin_addressof(new_blocks_count_least_p1))) [[unlikely]]
+	{
+		::fast_io::fast_terminate();
+	}
+#else
+	constexpr ::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
+	::std::size_t new_blocks_count_least_p1{new_blocks_count_least};
+	if (mx == new_blocks_count_least)
+	{
+		::fast_io::fast_terminate();
+	}
+	++new_blocks_count_least_p1;
+#endif
+	auto [new_start_ptr, new_blocks_count] = block_typed_allocator::allocate_at_least(new_blocks_count_least_p1);
 
 	auto const old_reserved_blocks_count{
 		static_cast<::std::size_t>(old_after_reserved_ptr - old_start_reserved_ptr)};
@@ -567,12 +583,21 @@ template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_allocate_on_empty_common_with_n_impl(dequecontroltype &controller, ::std::size_t align, ::std::size_t bytes,
 																 ::std::size_t initial_allocated_block_counts) noexcept
 {
+#if (defined(__GNUC__) || defined(__clang__))
+	::std::size_t initial_allocated_block_counts_with_sentinel;
+	if (__builtin_add_overflow(initial_allocated_block_counts, 1u,
+							   __builtin_addressof(initial_allocated_block_counts_with_sentinel)))
+	{
+		::fast_io::fast_terminate();
+	}
+#else
 	constexpr ::std::size_t maxval{::std::numeric_limits<::std::size_t>::max()};
 	if (initial_allocated_block_counts == maxval) [[unlikely]]
 	{
 		::fast_io::fast_terminate();
 	}
 	::std::size_t initial_allocated_block_counts_with_sentinel{initial_allocated_block_counts + 1u};
+#endif
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
 	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(initial_allocated_block_counts_with_sentinel);
 	// we need a null terminator as sentinel like c style string does
@@ -1216,21 +1241,53 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 	auto const total_slots_count{
 		static_cast<::std::size_t>(controller.controller_block.controller_after_ptr - controller.controller_block.controller_start_ptr)};
 	auto const half_slots_count{static_cast<::std::size_t>(total_slots_count >> 1u)};
+#if defined(__GNUC__) || defined(__clang__)
+	::std::size_t new_used_blocks_count;
+	if(__builtin_add_overflow(used_blocks_count, extrablocks,__builtin_addressof(new_used_blocks_count))) [[unlikely]]
+	{
+		::fast_io::fast_terminate();
+	}
+#else
+	constexpr
+		::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
+	::std::size_t const mx_sub_extrablocks{mx-extrablocks};
+	if (mx_sub_extrablocks < used_blocks_count)
+	{
+		::fast_io::fast_terminate();
+	}
+
 	auto const new_used_blocks_count{used_blocks_count + extrablocks};
+#endif
+
 	if (half_slots_count < new_used_blocks_count) // grow blocks
 	{
-#if 0
-		::fast_io::iomnp::debug_println(::std::source_location::current());
-		constexpr ::std::size_t mx{::std::numeric_limits<::std::size_t>::max()};
-		constexpr ::std::size_t mxdv2m1{(mx >> 1u) - 1u};
-		if (mxdv2m1 < total_slots_count)
+#if defined(__GNUC__) || defined(__clang__)
+		::std::size_t doubleslotsextra;
+		if (__builtin_add_overflow(total_slots_count, extrablocks, __builtin_addressof(doubleslotsextra)))
 		{
 			::fast_io::fast_terminate();
 		}
+		if (__builtin_add_overflow(doubleslotsextra, doubleslotsextra, __builtin_addressof(doubleslotsextra)))
+		{
+			::fast_io::fast_terminate();
+		}
+#else
+		::std::size_t mx_total_slots{mx-extrablocks};
+		if(mx_total_slots < total_slots_count)
+		{
+			::fast_io::fast_terminate();
+		}
+		::std::size_t doubleslotsextra{extrablocks + total_slots_count};
+		constexpr
+			::std::size_t mxdv2m1{(mx >> 1u)};
+		if (mxdv2m1 < doubleslotsextra)
+		{
+			::fast_io::fast_terminate();
+		}
+		doubleslotsextra<<=1u;
 #endif
 
-		::fast_io::containers::details::deque_grow_to_new_blocks_count_impl<allocator>(controller,
-				static_cast<::std::size_t>(((total_slots_count+extra) << 1u) + 1u));
+		::fast_io::containers::details::deque_grow_to_new_blocks_count_impl<allocator>(controller, doubleslotsextra);
 	}
 	else
 	{
@@ -1246,7 +1303,7 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 			static_cast<::std::size_t>(reserved_blocks_count >> 1u)};
 		auto reserved_pivot{start_reserved_ptr + half_reserved_blocks_count};
 		auto const half_used_blocks_count{
-			static_cast<::std::size_t>(used_blocks_count >> 1u)};
+			static_cast<::std::size_t>(new_used_blocks_count >> 1u)};
 		auto used_blocks_pivot{controller.front_block.controller_ptr + half_used_blocks_count};
 		if (used_blocks_pivot != reserved_pivot)
 		{
@@ -1356,7 +1413,7 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 		controller.front_block.controller_ptr = front_block_controller_ptr;
 		auto front_begin_ptr = static_cast<begin_ptrtype>(*front_block_controller_ptr);
 		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
-		controller.front_end_ptr = front_begin_ptr + bytes;
+		controller.front_end_ptr = front_begin_ptr + blockbytes;
 	}
 
 	controller.back_block.controller_ptr+=nb;
@@ -1365,7 +1422,7 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 
 	controller.back_block.begin_ptr = begin_ptr;
 	controller.back_block.curr_ptr = begin_ptr;
-	controller.back_end_ptr = begin_ptr + bytes;
+	controller.back_end_ptr = begin_ptr + blockbytes;
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
