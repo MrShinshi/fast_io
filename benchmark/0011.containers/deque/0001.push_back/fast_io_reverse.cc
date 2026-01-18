@@ -23,5 +23,5 @@ int main()
 			sum += e;
 		}
 	}
-	::fast_io::io::perrln("sum=",sum);
+	::fast_io::io::perrln("sum=", sum);
 }
