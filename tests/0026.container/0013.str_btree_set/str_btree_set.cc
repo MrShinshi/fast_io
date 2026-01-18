@@ -1,4 +1,4 @@
-
+#include <ranges>
 #include <fast_io.h>
 #include <fast_io_dsal/str_btree_set.h>
 
@@ -41,13 +41,13 @@ int main()
 	}
 
 	::fast_io::io::print("\nreverse:\n");
-/*
-// ::std::ranges::reverse_view does not pass CI
-	for (auto const &e : ::std::ranges::reverse_view(bset))
-*/
-	for(auto i{bset.crbegin()},ed{bset.crend()};i!=ed;++i)
+	/*
+	// ::std::ranges::reverse_view does not pass CI
+		for (auto const &e : ::std::ranges::reverse_view(bset))
+	*/
+	for (auto i{bset.crbegin()}, ed{bset.crend()}; i != ed; ++i)
 	{
-		auto const& e{*i};
+		auto const &e{*i};
 		::fast_io::io::println(e);
 	}
 
@@ -76,10 +76,10 @@ int main()
 			::fast_io::io::println("found: ", *it);
 		}
 	}
-    for (::std::size_t i{};i!=::std::size(fruits);++i)
-    {
-		auto const& e{fruits[i]};
-        bset.erase_key(e);
+	for (::std::size_t i{}; i != ::std::ranges::size(fruits); ++i)
+	{
+		auto const &e{fruits[i]};
+		bset.erase_key(e);
 	}
 
 	::fast_io::io::println("bset.is_empty():", bset.is_empty());
