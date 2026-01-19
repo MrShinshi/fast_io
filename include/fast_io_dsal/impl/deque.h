@@ -1426,7 +1426,7 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 	{
 		return;
 	}
-	::std::size_t blocksn{static_cast<::std::size_t>(controller.back_block.end_ptr - controller.back_block.curr_ptr)};
+	::std::size_t blocksn{static_cast<::std::size_t>(controller.back_end_ptr - controller.back_block.curr_ptr)};
 	if (n <= blocksn)
 	{
 		controller.back_block.curr_ptr += n;
@@ -1435,15 +1435,15 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 	::std::size_t back_more_blocks{static_cast<::std::size_t>(n - blocksn) / block_size};
 	if consteval
 	{
-		::fast_io::containers::details::deque_rebalance_or_grow_insertation_impl<allocator>(controller,
-																							back_more_blocks, align, block_size);
+		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(controller,
+																				  back_more_blocks, align, block_size);
 	}
 	else
 	{
 		constexpr ::std::size_t block_bytes{block_size * sz};
-		::fast_io::containers::details::deque_rebalance_or_grow_insertation_impl<allocator>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(
-			__builtin_addressof(controller),
-			back_more_blocks, align, block_bytes));
+		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(
+																					  __builtin_addressof(controller)),
+																				  back_more_blocks, align, block_bytes);
 	}
 }
 #endif
