@@ -1419,12 +1419,33 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 	controller.back_end_ptr = begin_ptr + blockbytes;
 }
 
-#if 0
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
 inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::std::size_t n)
 {
+	if (!n)
+	{
+		return;
+	}
+	::std::size_t blocksn{static_cast<::std::size_t>(controller.back_block.end_ptr - controller.back_block.curr_ptr)};
+	if (n <= blocksn)
+	{
+		controller.back_block.curr_ptr += n;
+		return;
+	}
+	::std::size_t back_more_blocks{static_cast<::std::size_t>(n - blocksn) / block_size};
+	if consteval
+	{
+		::fast_io::containers::details::deque_rebalance_or_grow_insertation_impl<allocator>(controller,
+																							back_more_blocks, align, block_size);
+	}
+	else
+	{
+		constexpr ::std::size_t block_bytes{block_size * sz};
+		::fast_io::containers::details::deque_rebalance_or_grow_insertation_impl<allocator>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(
+			__builtin_addressof(controller),
+			back_more_blocks, align, block_bytes));
+	}
 }
-#endif
 #endif
 
 } // namespace details
@@ -2189,21 +2210,33 @@ private:
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
 	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
-#if 0
-		if constexpr(::std::ranges::sized_range<R>)
+		if constexpr (::std::ranges::sized_range<R> && 0)
 		{
 			size_type const rgsize{::std::ranges::size(rg)};
+			if (!rgsize)
+			{
+				return {pos, this->begin() + pos};
+			}
+#if 0
 			size_type const half_size{old_size >> 1u};
 			if (pos < half_size)
 			{
 				
 			}
 			else
+#endif
 			{
+				::fast_io::containers::details::deque_reserve_back_spaces<allocator,
+																		  alignof(value_type), sizeof(value_type), block_size>(this->controller, rgsize);
+				auto posit{this->begin() + pos};
+				auto thisend{this->end()};
+				::fast_io::freestanding::uninitialized_relocate_backward(posit,
+																		 thisend - rgsize, thisend);
+				::fast_io::freestanding::uninitialized_copy_n(::std::ranges::cbegin(rg), rgsize, posit);
+				return {pos, posit};
 			}
 		}
 		else
-#endif
 		{
 			size_type const quarterold_size{old_size >> 2u};
 			size_type retpos;
