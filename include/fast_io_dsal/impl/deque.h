@@ -1409,7 +1409,9 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
 		controller.front_end_ptr = front_begin_ptr + blockbytes;
 	}
-
+#if 0
+	::fast_io::io::debug_println(::std::source_location::current()," \tnb=",nb);
+#endif
 	controller.back_block.controller_ptr += nb;
 	auto begin_ptr =
 		static_cast<begin_ptrtype>(*controller.back_block.controller_ptr);
@@ -1432,7 +1434,9 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 		controller.back_block.curr_ptr += n;
 		return;
 	}
-	::std::size_t back_more_blocks{static_cast<::std::size_t>(n - blocksn) / block_size};
+	::std::size_t nmblocksn{n - blocksn};
+	::std::size_t const back_more_blocks{nmblocksn / block_size};
+	::std::size_t const back_more_blocks_mod{nmblocksn % block_size};
 	if consteval
 	{
 		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(controller,
@@ -1445,6 +1449,7 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 																					  __builtin_addressof(controller)),
 																				  back_more_blocks, align, block_bytes);
 	}
+	controller.back_block.curr_ptr = controller.front_block.begin_ptr + back_more_blocks_mod;
 }
 #endif
 
@@ -2226,9 +2231,15 @@ private:
 			else
 #endif
 			{
+#if 0
+				::fast_io::io::debug_println(::std::source_location::current(),"\tthis->size()=", this->size()," rgsize=",rgsize);
+#endif
 				::fast_io::containers::details::deque_reserve_back_spaces<allocator,
 																		  alignof(value_type), sizeof(value_type), block_size>(this->controller, rgsize);
 				auto posit{this->begin() + pos};
+#if 0
+				::fast_io::io::debug_println(::std::source_location::current(),"\tthis->size()=", this->size()," rgsize=",rgsize);
+#endif
 				auto thisend{this->end()};
 				::fast_io::freestanding::uninitialized_relocate_backward(posit,
 																		 thisend - rgsize, thisend);
