@@ -1419,6 +1419,9 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 	controller.back_block.begin_ptr = begin_ptr;
 	controller.back_block.curr_ptr = begin_ptr;
 	controller.back_end_ptr = begin_ptr + blockbytes;
+#if 0
+	::fast_io::io::debug_println(::std::source_location::current()," \tbegin_ptr=",::fast_io::mnp::pointervw(begin_ptr));
+#endif
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
@@ -1428,28 +1431,35 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 	{
 		return;
 	}
-	::std::size_t blocksn{static_cast<::std::size_t>(controller.back_end_ptr - controller.back_block.curr_ptr)};
+	auto back_curr_ptr{controller.back_block.curr_ptr};
+	::std::size_t blocksn{static_cast<::std::size_t>(controller.back_end_ptr - back_curr_ptr)};
 	if (n <= blocksn)
 	{
-		controller.back_block.curr_ptr += n;
+		controller.back_block.curr_ptr = back_curr_ptr + n;
 		return;
 	}
+	::std::size_t startpos{static_cast<::std::size_t>(back_curr_ptr - controller.back_block.begin_ptr)};
 	::std::size_t nmblocksn{n - blocksn};
-	::std::size_t const back_more_blocks{nmblocksn / block_size};
+	::std::size_t back_more_blocks{nmblocksn / block_size};
 	::std::size_t const back_more_blocks_mod{nmblocksn % block_size};
+	::std::size_t toallocate{back_more_blocks};
+	if (back_more_blocks_mod)
+	{
+		++toallocate;
+	}
 	if consteval
 	{
 		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(controller,
-																				  back_more_blocks, align, block_size);
+																				  toallocate, align, block_size);
 	}
 	else
 	{
 		constexpr ::std::size_t block_bytes{block_size * sz};
 		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(
 																					  __builtin_addressof(controller)),
-																				  back_more_blocks, align, block_bytes);
+																				  toallocate, align, block_bytes);
 	}
-	controller.back_block.curr_ptr = controller.front_block.begin_ptr + back_more_blocks_mod;
+	controller.back_block.curr_ptr = controller.back_block.begin_ptr + back_more_blocks_mod;
 }
 #endif
 
@@ -2215,7 +2225,12 @@ private:
 		requires ::std::constructible_from<value_type, ::std::ranges::range_value_t<R>>
 	inline constexpr insert_range_result insert_range_impl(size_type pos, R &&rg, size_type old_size) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
-		if constexpr (::std::ranges::sized_range<R> && 0)
+		constexpr bool enable_size_insertation{
+#ifdef FAST_IO_DEBUG_ENABLE_SIZE_INSERTATION
+			true // we haven't yet finished this so we use a macro. will remove it later on
+#endif
+		};
+		if constexpr (::std::ranges::sized_range<R> && enable_size_insertation)
 		{
 			size_type const rgsize{::std::ranges::size(rg)};
 			if (!rgsize)
