@@ -2299,7 +2299,7 @@ public:
 	inline constexpr iterator insert_range(const_iterator pos, R &&rg) noexcept(::std::is_nothrow_constructible_v<value_type, ::std::ranges::range_value_t<R>>)
 	{
 		return this->insert_range_impl(
-					   ::fast_io::containers::details::deque_iter_difference_unsigned_common(pos, this->cbegin()), rg, this->size())
+					   ::fast_io::containers::details::deque_iter_difference_unsigned_common(pos.itercontent, this->controller.front_block), rg, this->size())
 			.it;
 	}
 
