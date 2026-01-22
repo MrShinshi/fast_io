@@ -102,6 +102,11 @@ inline constexpr void deque_add_assign_signed_impl(::fast_io::containers::detail
 	else
 	{
 		diff += unsignedpos;
+		if (diff < blocksize)
+		{
+			itercontent.curr_ptr = curr_ptr + unsignedpos;
+			return;
+		}
 		curr_ptr = (begin_ptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
 	}
 	itercontent.begin_ptr = begin_ptr;
@@ -115,8 +120,15 @@ inline constexpr void deque_add_assign_unsigned_impl(::fast_io::containers::deta
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
 
-	size_type diff{static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr) + unsignedpos};
-	auto begin_ptr{*(itercontent.controller_ptr += diff / blocksize)};
+	auto begin_ptr{itercontent.begin_ptr};
+	auto curr_ptr{itercontent.curr_ptr};
+	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr) + unsignedpos};
+	if (diff < blocksize)
+	{
+		itercontent.curr_ptr = curr_ptr + unsignedpos;
+		return;
+	}
+	begin_ptr = *(itercontent.controller_ptr += diff / blocksize);
 	itercontent.begin_ptr = begin_ptr;
 	itercontent.curr_ptr = begin_ptr + diff % blocksize;
 }
@@ -141,6 +153,11 @@ inline constexpr void deque_sub_assign_signed_impl(::fast_io::containers::detail
 	}
 	else
 	{
+		if (unsignedpos <= diff)
+		{
+			itercontent.curr_ptr = curr_ptr - unsignedpos;
+			return;
+		}
 		diff = blocksizem1 + unsignedpos - diff;
 		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
 	}
@@ -155,11 +172,18 @@ inline constexpr void deque_sub_assign_unsigned_impl(::fast_io::containers::deta
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
 	constexpr size_type blocksizem1{blocksize - 1u};
-	size_type diff{blocksizem1 + unsignedpos -
-				   static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr)};
-	auto begin_ptr{*(itercontent.controller_ptr -= diff / blocksize)};
-	itercontent.begin_ptr = begin_ptr;
-	itercontent.curr_ptr = begin_ptr + (blocksizem1 - diff % blocksize);
+	auto begin_ptr{itercontent.begin_ptr};
+	auto curr_ptr{itercontent.curr_ptr};
+	size_type offset{static_cast<size_type>(curr_ptr - begin_ptr)};
+	if (unsignedpos <= offset)
+	{
+		itercontent.curr_ptr = curr_ptr - unsignedpos;
+		return;
+	}
+	size_type diff{blocksizem1 + unsignedpos - offset};
+	auto new_begin_ptr{*(itercontent.controller_ptr -= diff / blocksize)};
+	itercontent.begin_ptr = new_begin_ptr;
+	itercontent.curr_ptr = new_begin_ptr + (blocksizem1 - diff % blocksize);
 }
 
 template <typename T>
@@ -2264,9 +2288,9 @@ private:
 		}
 		else
 		{
-			size_type const quarterold_size{old_size >> 2u};
 			size_type retpos;
 			iterator retit, rotfirst, rotmid, rotlast;
+			size_type const quarterold_size{old_size >> 2u};
 			if (pos < quarterold_size)
 			{
 				this->prepend_range(rg);
