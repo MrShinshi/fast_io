@@ -225,6 +225,17 @@ inline constexpr T &deque_index_unsigned(::fast_io::containers::details::deque_c
 	}
 }
 
+template <typename T>
+inline constexpr T &deque_index_container_unsigned(::fast_io::containers::details::deque_control_block<T> const &itercontent, ::std::size_t unsignedpos) noexcept
+{
+	using size_type = ::std::size_t;
+	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	auto curr_ptr{itercontent.curr_ptr};
+	size_type const diff{static_cast<size_type>(curr_ptr - itercontent.begin_ptr) + unsignedpos};
+	// Container should not have fast path because container cannot have locality like iterator[] does
+	return itercontent.controller_ptr[diff / blocksize][diff % blocksize];
+}
+
 template <typename T, bool isconst>
 struct deque_iterator
 {
@@ -2109,7 +2120,7 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
+		return ::fast_io::containers::details::deque_index_container_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr const_reference operator[](size_type index) const noexcept
@@ -2118,17 +2129,17 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
+		return ::fast_io::containers::details::deque_index_container_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr reference index_unchecked(size_type index) noexcept
 	{
-		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
+		return ::fast_io::containers::details::deque_index_container_unsigned(controller.front_block, index);
 	}
 
 	inline constexpr const_reference index_unchecked(size_type index) const noexcept
 	{
-		return ::fast_io::containers::details::deque_index_unsigned(controller.front_block, index);
+		return ::fast_io::containers::details::deque_index_container_unsigned(controller.front_block, index);
 	}
 
 	static inline constexpr size_type max_size() noexcept
