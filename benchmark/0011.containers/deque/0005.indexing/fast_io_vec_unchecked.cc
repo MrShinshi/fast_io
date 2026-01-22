@@ -18,7 +18,7 @@ int main()
 	::std::size_t sum{};
 	{
 		fast_io::timer tm1(u8"indexing unchecked loop");
-		for (::std::size_t i{}, n{vec.size()}; i != n; ++i)
+		for (::std::size_t i{}, sz{vec.size()}; i != sz; ++i)
 		{
 			sum += vec.index_unchecked(i);
 		}

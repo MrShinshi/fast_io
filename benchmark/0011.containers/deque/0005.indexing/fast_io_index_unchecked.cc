@@ -17,7 +17,7 @@ int main()
 	::std::size_t sum{};
 	{
 		::fast_io::timer tm1(u8"indexing unchecked loop");
-		for (::std::size_t i{}, n{deq.size()}; i != n; ++i)
+		for (::std::size_t i{}, sz{deq.size()}; i != sz; ++i)
 		{
 			sum += deq.index_unchecked(i);
 		}
