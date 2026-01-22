@@ -82,36 +82,48 @@ struct
 };
 
 template <typename T>
-inline constexpr void deque_add_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
+inline constexpr void deque_add_assign_signed_impl(
+	::fast_io::containers::details::deque_control_block<T> &itercontent,
+	::std::ptrdiff_t pos) noexcept
 {
-	using size_type = ::std::size_t;
-	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
-	constexpr size_type blocksizem1{blocksize - 1u};
-	size_type unsignedpos{static_cast<size_type>(pos)};
-	auto begin_ptr{itercontent.begin_ptr};
+	constexpr ::std::size_t blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
+	constexpr ::std::ptrdiff_t signedblocksize{static_cast<::std::ptrdiff_t>(blocksize)};
+
 	auto curr_ptr{itercontent.curr_ptr};
-	auto controllerptr{itercontent.controller_ptr};
-	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
-	if (pos < 0)
+	// Signed offset inside current block
+	::std::ptrdiff_t offset{pos + (curr_ptr - itercontent.begin_ptr)};
+
+	// Fast path: stays inside the same block
+	if (static_cast<::std::size_t>(offset) < blocksize)
 	{
-		constexpr size_type zero{};
-		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-		diff = (blocksizem1 + abspos) - diff;
-		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+		itercontent.curr_ptr = curr_ptr + pos;
 	}
 	else
 	{
-		diff += unsignedpos;
-		if (diff < blocksize)
+		// Compute block jump with correct signed semantics
+		::std::ptrdiff_t node_offset;
+		if (offset < 0)
 		{
-			itercontent.curr_ptr = curr_ptr + unsignedpos;
-			return;
+			node_offset = (offset + 1) / signedblocksize - 1;
 		}
-		curr_ptr = (begin_ptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
+		else
+		{
+			node_offset = static_cast<::std::ptrdiff_t>(static_cast<::std::size_t>(offset) / blocksize);
+		}
+
+		// Move to the correct block
+		auto begin_ptr{*(itercontent.controller_ptr += node_offset)};
+		itercontent.begin_ptr = begin_ptr;
+
+		// Normalize pointer inside the block
+		itercontent.curr_ptr = begin_ptr + (offset - node_offset * signedblocksize);
 	}
-	itercontent.begin_ptr = begin_ptr;
-	itercontent.curr_ptr = curr_ptr;
-	itercontent.controller_ptr = controllerptr;
+}
+
+template <typename T>
+inline constexpr void deque_sub_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &it, ::std::ptrdiff_t pos) noexcept
+{
+	::fast_io::containers::details::deque_add_assign_signed_impl(it, -pos);
 }
 
 template <typename T>
@@ -126,44 +138,13 @@ inline constexpr void deque_add_assign_unsigned_impl(::fast_io::containers::deta
 	if (diff < blocksize)
 	{
 		itercontent.curr_ptr = curr_ptr + unsignedpos;
-		return;
-	}
-	begin_ptr = *(itercontent.controller_ptr += diff / blocksize);
-	itercontent.begin_ptr = begin_ptr;
-	itercontent.curr_ptr = begin_ptr + diff % blocksize;
-}
-
-template <typename T>
-inline constexpr void deque_sub_assign_signed_impl(::fast_io::containers::details::deque_control_block<T> &itercontent, ::std::ptrdiff_t pos) noexcept
-{
-	using size_type = ::std::size_t;
-	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
-	constexpr size_type blocksizem1{blocksize - 1u};
-	size_type unsignedpos{static_cast<size_type>(pos)};
-	auto begin_ptr{itercontent.begin_ptr};
-	auto curr_ptr{itercontent.curr_ptr};
-	auto controllerptr{itercontent.controller_ptr};
-	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
-	if (pos < 0)
-	{
-		constexpr size_type zero{};
-		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-		diff += abspos;
-		curr_ptr = (begin_ptr = *(controllerptr += diff / blocksize)) + diff % blocksize;
 	}
 	else
 	{
-		if (unsignedpos <= diff)
-		{
-			itercontent.curr_ptr = curr_ptr - unsignedpos;
-			return;
-		}
-		diff = blocksizem1 + unsignedpos - diff;
-		curr_ptr = (begin_ptr = *(controllerptr -= diff / blocksize)) + (blocksizem1 - diff % blocksize);
+		begin_ptr = *(itercontent.controller_ptr += diff / blocksize);
+		itercontent.begin_ptr = begin_ptr;
+		itercontent.curr_ptr = begin_ptr + diff % blocksize;
 	}
-	itercontent.begin_ptr = begin_ptr;
-	itercontent.curr_ptr = curr_ptr;
-	itercontent.controller_ptr = controllerptr;
 }
 
 template <typename T>
@@ -178,12 +159,14 @@ inline constexpr void deque_sub_assign_unsigned_impl(::fast_io::containers::deta
 	if (unsignedpos <= offset)
 	{
 		itercontent.curr_ptr = curr_ptr - unsignedpos;
-		return;
 	}
-	size_type diff{blocksizem1 + unsignedpos - offset};
-	auto new_begin_ptr{*(itercontent.controller_ptr -= diff / blocksize)};
-	itercontent.begin_ptr = new_begin_ptr;
-	itercontent.curr_ptr = new_begin_ptr + (blocksizem1 - diff % blocksize);
+	else
+	{
+		size_type diff{blocksizem1 + unsignedpos - offset};
+		begin_ptr = (*(itercontent.controller_ptr -= diff / blocksize));
+		itercontent.begin_ptr = begin_ptr;
+		itercontent.curr_ptr = begin_ptr + (blocksizem1 - diff % blocksize);
+	}
 }
 
 template <typename T>
@@ -191,23 +174,36 @@ inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_con
 {
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
-	constexpr size_type blocksizem1{blocksize - 1u};
-	size_type unsignedpos{static_cast<size_type>(pos)};
-	auto begin_ptr{itercontent.begin_ptr};
+	constexpr ::std::ptrdiff_t signedblocksize{static_cast<::std::ptrdiff_t>(blocksize)};
+
 	auto curr_ptr{itercontent.curr_ptr};
-	auto controllerptr{itercontent.controller_ptr};
-	size_type diff{static_cast<size_type>(curr_ptr - begin_ptr)};
-	if (pos < 0)
+	// Signed offset inside current block
+	::std::ptrdiff_t offset{pos + (curr_ptr - itercontent.begin_ptr)};
+
+	// Fast path: stays inside the same block
+	if (static_cast<::std::size_t>(offset) < blocksize)
 	{
-		constexpr size_type zero{};
-		size_type abspos{static_cast<size_type>(zero - unsignedpos)};
-		diff = blocksizem1 + abspos - diff;
-		return (*(controllerptr - diff / blocksize))[blocksizem1 - diff % blocksize];
+		return curr_ptr[pos];
 	}
 	else
 	{
-		diff += unsignedpos;
-		return controllerptr[diff / blocksize][diff % blocksize];
+		// Compute block jump with correct signed semantics
+		::std::ptrdiff_t node_offset;
+		if (offset < 0)
+		{
+			node_offset = (offset + 1) / signedblocksize - 1;
+		}
+		else
+		{
+			node_offset = static_cast<::std::ptrdiff_t>(static_cast<::std::size_t>(offset) / blocksize);
+		}
+
+		// Move to the correct block
+		auto begin_ptr{*(itercontent.controller_ptr += node_offset)};
+		itercontent.begin_ptr = begin_ptr;
+
+		// Normalize pointer inside the block
+		itercontent.curr_ptr = begin_ptr + (offset - node_offset * signedblocksize);
 	}
 }
 
@@ -216,8 +212,17 @@ inline constexpr T &deque_index_unsigned(::fast_io::containers::details::deque_c
 {
 	using size_type = ::std::size_t;
 	constexpr size_type blocksize{::fast_io::containers::details::deque_block_size<sizeof(T)>};
-	size_type const diff{static_cast<size_type>(itercontent.curr_ptr - itercontent.begin_ptr) + unsignedpos};
-	return itercontent.controller_ptr[diff / blocksize][diff % blocksize];
+	auto curr_ptr{itercontent.curr_ptr};
+	size_type const diff{static_cast<size_type>(curr_ptr - itercontent.begin_ptr) + unsignedpos};
+	if (diff < blocksize)
+	{
+		// Fast path: stays inside the same block
+		return curr_ptr[unsignedpos];
+	}
+	else
+	{
+		return itercontent.controller_ptr[diff / blocksize][diff % blocksize];
+	}
 }
 
 template <typename T, bool isconst>
