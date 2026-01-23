@@ -5,9 +5,7 @@
 int main()
 {
 	::fast_io::deque<::std::size_t> dq{30zu, 40zu, 20zu, 10zu};
-	::fast_io::deque<::std::size_t> dq2{30zu, 40zu, 20zu, 10zu};
-
-	//	auto dq2(dq);
+	auto dq2(dq);
 	::std::sort(dq.begin(), dq.end());
 	::std::sort(dq2.rbegin(), dq2.rend());
 	::fast_io::out_buf_type obf(::fast_io::out());
