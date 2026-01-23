@@ -197,13 +197,7 @@ inline constexpr T &deque_index_signed(::fast_io::containers::details::deque_con
 		{
 			node_offset = static_cast<::std::ptrdiff_t>(static_cast<::std::size_t>(offset) / blocksize);
 		}
-
-		// Move to the correct block
-		auto begin_ptr{*(itercontent.controller_ptr += node_offset)};
-		itercontent.begin_ptr = begin_ptr;
-
-		// Normalize pointer inside the block
-		itercontent.curr_ptr = begin_ptr + (offset - node_offset * signedblocksize);
+		return itercontent.controller_ptr[node_offset][offset - node_offset * signedblocksize];
 	}
 }
 
@@ -2286,14 +2280,14 @@ private:
 			else
 #endif
 			{
-#if 0
-				::fast_io::io::debug_println(::std::source_location::current(),"\tthis->size()=", this->size()," rgsize=",rgsize);
+#if 1
+				::fast_io::io::debug_println(::std::source_location::current(), "\tthis->size()=", this->size(), " rgsize=", rgsize);
 #endif
 				::fast_io::containers::details::deque_reserve_back_spaces<allocator,
 																		  alignof(value_type), sizeof(value_type), block_size>(this->controller, rgsize);
 				auto posit{this->begin() + pos};
-#if 0
-				::fast_io::io::debug_println(::std::source_location::current(),"\tthis->size()=", this->size()," rgsize=",rgsize);
+#if 1
+				::fast_io::io::debug_println(::std::source_location::current(), "\tthis->size()=", this->size(), " rgsize=", rgsize);
 #endif
 				auto thisend{this->end()};
 				::fast_io::freestanding::uninitialized_relocate_backward(posit,
