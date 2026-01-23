@@ -1066,7 +1066,7 @@ inline constexpr void deque_clone_trivial_impl(dequecontroltype &controller, deq
 	begin_ptrtype lastblockbegin;
 	if (front_controller_ptr == back_controller_ptr)
 	{
-		lastblockbegin = controller.front_block.curr_ptr;
+		lastblockbegin = fromcontroller.front_block.curr_ptr;
 	}
 	else
 	{
