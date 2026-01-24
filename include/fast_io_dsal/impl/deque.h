@@ -1463,7 +1463,6 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 	::std::size_t blocksn{static_cast<::std::size_t>(controller.back_end_ptr - back_curr_ptr)};
 	if (n <= blocksn)
 	{
-		controller.back_block.curr_ptr = back_curr_ptr + n;
 		return;
 	}
 	::std::size_t startpos{static_cast<::std::size_t>(back_curr_ptr - controller.back_block.begin_ptr)};
