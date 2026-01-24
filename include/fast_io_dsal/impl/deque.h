@@ -634,6 +634,7 @@ inline constexpr void deque_allocate_on_empty_common_with_n_impl(dequecontroltyp
 #endif
 	using block_typed_allocator = ::fast_io::typed_generic_allocator_adapter<allocator, typename dequecontroltype::controlreplacetype>;
 	auto [allocated_blocks_ptr, allocated_blocks_count] = block_typed_allocator::allocate_at_least(initial_allocated_block_counts_with_sentinel);
+
 	// we need a null terminator as sentinel like c style string does
 	--allocated_blocks_count;
 	auto &controller_block{controller.controller_block};
@@ -1377,7 +1378,6 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 			controller, align, blockbytes, nb);
 		return;
 	}
-
 	using replacetype = typename dequecontroltype::replacetype;
 	using begin_ptrtype = replacetype *;
 
@@ -1446,13 +1446,7 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 #if 0
 	::fast_io::io::debug_println(::std::source_location::current()," \tnb=",nb);
 #endif
-	controller.back_block.controller_ptr += nb;
-	auto begin_ptr =
-		static_cast<begin_ptrtype>(*controller.back_block.controller_ptr);
 
-	controller.back_block.begin_ptr = begin_ptr;
-	controller.back_block.curr_ptr = begin_ptr;
-	controller.back_end_ptr = begin_ptr + blockbytes;
 #if 0
 	::fast_io::io::debug_println(::std::source_location::current()," \tbegin_ptr=",::fast_io::mnp::pointervw(begin_ptr));
 #endif
@@ -1493,7 +1487,6 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 																					  __builtin_addressof(controller)),
 																				  toallocate, align, block_bytes);
 	}
-	controller.back_block.curr_ptr = controller.back_block.begin_ptr + back_more_blocks_mod;
 }
 #endif
 
@@ -2280,19 +2273,27 @@ private:
 			else
 #endif
 			{
-#if 1
+#if 0
 				::fast_io::io::debug_println(::std::source_location::current(), "\tthis->size()=", this->size(), " rgsize=", rgsize);
 #endif
 				::fast_io::containers::details::deque_reserve_back_spaces<allocator,
 																		  alignof(value_type), sizeof(value_type), block_size>(this->controller, rgsize);
 				auto posit{this->begin() + pos};
-#if 1
+#if 0
 				::fast_io::io::debug_println(::std::source_location::current(), "\tthis->size()=", this->size(), " rgsize=", rgsize);
 #endif
 				auto thisend{this->end()};
+				auto thisendrgsize{thisend + rgsize};
 				::fast_io::freestanding::uninitialized_relocate_backward(posit,
-																		 thisend - rgsize, thisend);
+																		 thisend, thisendrgsize);
 				::fast_io::freestanding::uninitialized_copy_n(::std::ranges::cbegin(rg), rgsize, posit);
+				if (thisendrgsize.itercontent.begin_ptr == thisendrgsize.itercontent.curr_ptr)
+				{
+					thisendrgsize.itercontent.curr_ptr =
+						(thisendrgsize.itercontent.begin_ptr = *--thisendrgsize.itercontent.controller_ptr) + block_size;
+				}
+				this->controller.back_block = thisendrgsize.itercontent;
+				this->controller.back_end_ptr = thisendrgsize.itercontent.begin_ptr + block_size;
 				return {pos, posit};
 			}
 		}
