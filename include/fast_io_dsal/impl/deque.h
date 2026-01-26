@@ -1390,7 +1390,7 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 		std::size_t distance_back_to_reserve{
 			static_cast<std::size_t>(controller.controller_block.controller_after_reserved_ptr -
 									 controller.back_block.controller_ptr)};
-		if (distance_back_to_reserve < nb)
+		if (distance_back_to_reserve <= nb)
 		{
 			::fast_io::containers::details::deque_rebalance_or_grow_insertation_impl<allocator>(controller, nb);
 		}
@@ -1414,7 +1414,6 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 			{
 				to_allocate_blocks -= front_borrowed_blocks_count;
 			}
-
 			auto controller_start_reserved_ptr{
 				controller.controller_block.controller_start_reserved_ptr};
 
@@ -1425,7 +1424,6 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 																 pos);
 			controller.controller_block.controller_start_reserved_ptr =
 				controller_start_reserved_ptr + front_borrowed_blocks_count;
-
 			for (auto e{pos + to_allocate_blocks}; pos != e; ++pos)
 			{
 				::std::construct_at(pos, static_cast<begin_ptrtype>(allocator::allocate_aligned(align, blockbytes)));
@@ -1443,13 +1441,6 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
 		controller.front_end_ptr = front_begin_ptr + blockbytes;
 	}
-#if 0
-	::fast_io::io::debug_println(::std::source_location::current()," \tnb=",nb);
-#endif
-
-#if 0
-	::fast_io::io::debug_println(::std::source_location::current()," \tbegin_ptr=",::fast_io::mnp::pointervw(begin_ptr));
-#endif
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
