@@ -1324,9 +1324,6 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 	}
 	else
 	{
-#if 0
-		::fast_io::iomnp::debug_println(::std::source_location::current());
-#endif
 		// balance blocks
 		auto start_reserved_ptr{controller.controller_block.controller_start_reserved_ptr};
 		auto after_reserved_ptr{controller.controller_block.controller_after_reserved_ptr};
@@ -1336,15 +1333,11 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 			static_cast<::std::size_t>(reserved_blocks_count >> 1u)};
 		auto reserved_pivot{start_reserved_ptr + half_reserved_blocks_count};
 		auto const half_used_blocks_count{
-			static_cast<::std::size_t>(new_used_blocks_count >> 1u)};
+			static_cast<::std::size_t>(used_blocks_count >> 1u)}; // this place needs to deal with extra block
 		auto used_blocks_pivot{controller.front_block.controller_ptr + half_used_blocks_count};
 		if (used_blocks_pivot != reserved_pivot)
 		{
 			::std::ptrdiff_t diff{reserved_pivot - used_blocks_pivot};
-#if 0
-			::fast_io::iomnp::debug_println(::std::source_location::current(),
-			"\tdiff=",diff);
-#endif
 			auto rotate_pivot{diff < 0 ? start_reserved_ptr : after_reserved_ptr};
 			rotate_pivot -= diff;
 			::std::rotate(start_reserved_ptr, rotate_pivot, after_reserved_ptr);
@@ -1355,9 +1348,6 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 		auto slots_pivot{controller.controller_block.controller_start_ptr + half_slots_count};
 		if (slots_pivot != reserved_pivot)
 		{
-#if 0
-			::fast_io::iomnp::debug_println(::std::source_location::current());
-#endif
 			::std::ptrdiff_t diff{slots_pivot - reserved_pivot};
 			::fast_io::freestanding::overlapped_copy(start_reserved_ptr,
 													 after_reserved_ptr, start_reserved_ptr + diff);
