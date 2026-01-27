@@ -1344,8 +1344,8 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 			controller.front_block.controller_ptr += diff;
 			controller.back_block.controller_ptr += diff;
 		}
-
-		auto slots_pivot{controller.controller_block.controller_start_ptr + half_slots_count};
+		auto const half_slotsextra_count{static_cast<::std::size_t>((total_slots_count + extrablocks) >> 1u)};
+		auto slots_pivot{controller.controller_block.controller_start_ptr + half_slotsextra_count};
 		if (slots_pivot != reserved_pivot)
 		{
 			::std::ptrdiff_t diff{slots_pivot - reserved_pivot};
