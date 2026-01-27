@@ -1365,21 +1365,21 @@ inline constexpr bool deque_reserve_back_blocks_impl(dequecontroltype &controlle
 	using replacetype = typename dequecontroltype::replacetype;
 	using begin_ptrtype = replacetype *;
 
-	std::size_t diff_to_after_ptr =
-		static_cast<std::size_t>(
+	::std::size_t diff_to_after_ptr =
+		static_cast<::std::size_t>(
 			controller.controller_block.controller_after_reserved_ptr -
 			controller.back_block.controller_ptr);
 	if (diff_to_after_ptr <= nb)
 	{
-		std::size_t distance_back_to_reserve{
-			static_cast<std::size_t>(controller.controller_block.controller_after_reserved_ptr -
-									 controller.back_block.controller_ptr)};
-		if (distance_back_to_reserve <= nb)
+		::std::size_t distance_back_to_after{
+			static_cast<::std::size_t>(controller.controller_block.controller_after_ptr -
+									   controller.back_block.controller_ptr)};
+		if (distance_back_to_after <= nb)
 		{
 			::fast_io::containers::details::deque_rebalance_or_grow_insertation_impl<allocator>(controller, nb);
 		}
-		std::size_t diff_to_after_ptr2 =
-			static_cast<std::size_t>(
+		::std::size_t diff_to_after_ptr2 =
+			static_cast<::std::size_t>(
 				controller.controller_block.controller_after_reserved_ptr -
 				controller.back_block.controller_ptr);
 		if (diff_to_after_ptr2 <= nb)
@@ -1459,7 +1459,7 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-	if constexpr (false)
+	if constexpr (true)
 	{
 		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 	}
