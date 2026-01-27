@@ -668,8 +668,9 @@ inline constexpr void deque_allocate_on_empty_common_impl(dequecontroltype &cont
 	::fast_io::containers::details::deque_allocate_on_empty_common_with_n_impl<allocator>(controller, align, bytes, initial_allocated_block_counts);
 }
 
+// To remove
 template <typename allocator, typename dequecontroltype>
-inline constexpr void deque_grow_back_common_impl(
+inline constexpr void deque_grow_back_common_old_impl(
 	dequecontroltype &controller,
 	std::size_t align,
 	std::size_t bytes) noexcept
@@ -1353,13 +1354,13 @@ inline constexpr void deque_rebalance_or_grow_insertation_impl(dequecontroltype 
 }
 
 template <typename allocator, typename dequecontroltype>
-inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controller, ::std::size_t nb, ::std::size_t align, ::std::size_t blockbytes) noexcept
+inline constexpr bool deque_reserve_back_blocks_impl(dequecontroltype &controller, ::std::size_t nb, ::std::size_t align, ::std::size_t blockbytes) noexcept
 {
 	if (controller.controller_block.controller_start_ptr == nullptr)
 	{
 		::fast_io::containers::details::deque_allocate_on_empty_common_with_n_impl<allocator>(
 			controller, align, blockbytes, nb);
-		return;
+		return false;
 	}
 	using replacetype = typename dequecontroltype::replacetype;
 	using begin_ptrtype = replacetype *;
@@ -1424,19 +1425,47 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
 		controller.front_end_ptr = front_begin_ptr + blockbytes;
 	}
+
+	return true;
+}
+
+template <typename allocator, typename dequecontroltype>
+inline constexpr void deque_grow_back_common_impl(
+	dequecontroltype &controller,
+	std::size_t align,
+	std::size_t bytes) noexcept
+{
+	if (!::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(controller, 1zu, align, bytes))
+	{
+		return;
+	}
+	/**
+	 * At this point, we have guaranteed controller capacity.
+	 * Advance back_block.controller_ptr to the new block slot.
+	 */
+	++controller.back_block.controller_ptr;
+
+	/**
+	 * Load the block pointer and initialize begin/curr/end pointers.
+	 */
+	auto begin_ptr{*controller.back_block.controller_ptr};
+
+	controller.back_block.begin_ptr = begin_ptr;
+	controller.back_block.curr_ptr = begin_ptr;
+	controller.back_end_ptr = begin_ptr + bytes;
 }
 
 template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
 inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-	if constexpr (false)
+	if constexpr (true)
 	{
-		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(controller, 1zu, align, blockbytes);
+		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 	}
 	else
 	{
-		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
+		::fast_io::containers::details::deque_grow_back_common_old_impl<allocator>(controller, align, blockbytes);
 	}
 }
 
