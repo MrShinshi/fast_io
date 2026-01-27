@@ -885,13 +885,6 @@ inline constexpr void deque_grow_front_common(dequecontroltype &controller) noex
 	::fast_io::containers::details::deque_grow_front_common_impl<allocator>(controller, align, blockbytes);
 }
 
-template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
-inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexcept
-{
-	constexpr ::std::size_t blockbytes{sz * block_size};
-	::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
-}
-
 template <typename allocator, typename dequecontroltype>
 inline constexpr void deque_clear_common_impl(dequecontroltype &controller, ::std::size_t blockbytes)
 {
@@ -1430,6 +1423,20 @@ inline constexpr void deque_reserve_back_blocks_impl(dequecontroltype &controlle
 		auto front_begin_ptr = static_cast<begin_ptrtype>(*front_block_controller_ptr);
 		controller.front_block.curr_ptr = controller.front_block.begin_ptr = front_begin_ptr;
 		controller.front_end_ptr = front_begin_ptr + blockbytes;
+	}
+}
+
+template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
+inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexcept
+{
+	constexpr ::std::size_t blockbytes{sz * block_size};
+	if constexpr (false)
+	{
+		::fast_io::containers::details::deque_reserve_back_blocks_impl<allocator>(controller, 1zu, align, blockbytes);
+	}
+	else
+	{
+		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 	}
 }
 
