@@ -1422,11 +1422,13 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-	if constexpr (false)
+#if 1
+	if constexpr (true)
 	{
 		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 	}
 	else
+#endif
 	{
 		::fast_io::containers::details::deque_grow_back_common_old_impl<allocator>(controller, align, blockbytes);
 	}
@@ -1565,11 +1567,13 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_grow_front_common(dequecontroltype &controller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-	if constexpr (false)
+#if 1
+	if constexpr (true)
 	{
 		::fast_io::containers::details::deque_grow_front_common_impl<allocator>(controller, align, blockbytes);
 	}
 	else
+#endif
 	{
 		::fast_io::containers::details::deque_grow_front_common_old_impl<allocator>(controller, align, blockbytes);
 	}
