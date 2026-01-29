@@ -1422,13 +1422,16 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-#if 1
-	if constexpr (false)
+	constexpr bool use_new_push_implementation{
+#ifdef FAST_IO_DEBUG_DEQUE_USE_NEW_PUSH_IMPLEMENTATION
+		true
+#endif
+	};
+	if constexpr (use_new_push_implementation)
 	{
 		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 	}
 	else
-#endif
 	{
 		::fast_io::containers::details::deque_grow_back_common_old_impl<allocator>(controller, align, blockbytes);
 	}
@@ -1567,13 +1570,17 @@ template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size
 inline constexpr void deque_grow_front_common(dequecontroltype &controller) noexcept
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
-#if 1
-	if constexpr (false)
+
+	constexpr bool use_new_push_implementation{
+#ifdef FAST_IO_DEBUG_DEQUE_USE_NEW_PUSH_IMPLEMENTATION
+		true
+#endif
+	};
+	if constexpr (use_new_push_implementation)
 	{
 		::fast_io::containers::details::deque_grow_front_common_impl<allocator>(controller, align, blockbytes);
 	}
 	else
-#endif
 	{
 		::fast_io::containers::details::deque_grow_front_common_old_impl<allocator>(controller, align, blockbytes);
 	}
