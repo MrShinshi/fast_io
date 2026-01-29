@@ -5,7 +5,7 @@
 
 int main()
 {
-	fast_io::timer tm(u8"fast_io::deque");
+	fast_io::timer tm(u8"std::deque");
 	::std::deque<std::size_t> dq;
 	constexpr std::size_t n{50000};
 
