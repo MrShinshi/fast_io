@@ -1,0 +1,33 @@
+#include <fast_io.h>
+#include <fast_io_driver/timer.h>
+#include <deque>
+#include <cstddef>
+
+int main()
+{
+	fast_io::timer tm(u8"fast_io::deque");
+	::std::deque<std::size_t> dq;
+	constexpr std::size_t n{50000};
+
+	{
+		fast_io::timer t(u8"insert_range");
+		for (std::size_t i{}; i != n; ++i)
+		{
+			::std::size_t dqsz{dq.size()};
+			std::size_t pos = dqsz ? (i % dqsz) : 0;
+			std::size_t tmp[4]{i, i + 1, i + 2, i + 3};
+			dq.insert_range(dq.cbegin() + pos, tmp);
+		}
+	}
+
+	std::size_t sum{};
+	{
+		fast_io::timer t(u8"loop");
+		for (auto const e : dq)
+		{
+			sum += e;
+		}
+	}
+
+	fast_io::io::perrln("sum=", sum);
+}
