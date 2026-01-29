@@ -849,7 +849,6 @@ inline constexpr void deque_grow_front_common_old_impl(
 			std::construct_at(pos, new_block);
 		}
 	}
-
 	--controller.front_block.controller_ptr;
 
 	auto begin_ptr =
@@ -1995,7 +1994,15 @@ private:
 
 	inline constexpr void back_backspace() noexcept
 	{
-		controller.back_block.curr_ptr = (controller.back_end_ptr = ((controller.back_block.begin_ptr = *--controller.back_block.controller_ptr) + block_size));
+		auto back_controller_ptr{controller.back_block.controller_ptr};
+		if (back_controller_ptr == controller.front_block.controller_ptr) [[unlikely]]
+		{
+			auto begin_ptr{controller.back_block.begin_ptr};
+			constexpr ::std::size_t half_blocks_size{block_size >> 1u};
+			controller.front_block.curr_ptr = (controller.back_block.curr_ptr = begin_ptr + half_blocks_size);
+			return;
+		}
+		controller.back_block.curr_ptr = (controller.back_end_ptr = ((controller.back_block.begin_ptr = *(controller.back_block.controller_ptr = back_controller_ptr - 1)) + block_size));
 	}
 
 public:
@@ -2044,7 +2051,6 @@ public:
 		{
 			::fast_io::fast_terminate();
 		}
-
 		pop_back_unchecked();
 	}
 
