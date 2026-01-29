@@ -1423,7 +1423,7 @@ inline constexpr void deque_grow_back_common(dequecontroltype &controller) noexc
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
 #if 1
-	if constexpr (true)
+	if constexpr (false)
 	{
 		::fast_io::containers::details::deque_grow_back_common_impl<allocator>(controller, align, blockbytes);
 	}
@@ -1568,7 +1568,7 @@ inline constexpr void deque_grow_front_common(dequecontroltype &controller) noex
 {
 	constexpr ::std::size_t blockbytes{sz * block_size};
 #if 1
-	if constexpr (true)
+	if constexpr (false)
 	{
 		::fast_io::containers::details::deque_grow_front_common_impl<allocator>(controller, align, blockbytes);
 	}
@@ -1978,6 +1978,9 @@ private:
 		auto front_controller_ptr{controller.front_block.controller_ptr};
 		if (front_controller_ptr == controller.back_block.controller_ptr) [[unlikely]]
 		{
+			auto begin_ptr{controller.front_block.begin_ptr};
+			constexpr ::std::size_t half_blocks_size{block_size >> 1u};
+			controller.back_block.curr_ptr = (controller.front_block.curr_ptr = begin_ptr + half_blocks_size);
 			return;
 		}
 		controller.front_end_ptr = (controller.front_block.curr_ptr = controller.front_block.begin_ptr = *(controller.front_block.controller_ptr = front_controller_ptr + 1)) + block_size;
