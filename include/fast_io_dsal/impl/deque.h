@@ -1472,7 +1472,6 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 	}
 }
 
-
 template <typename allocator, typename dequecontroltype>
 inline constexpr bool deque_reserve_front_blocks_impl(dequecontroltype &controller, ::std::size_t nb, ::std::size_t align, ::std::size_t blockbytes) noexcept
 {
@@ -1546,6 +1545,42 @@ inline constexpr bool deque_reserve_front_blocks_impl(dequecontroltype &controll
 		}
 	}
 	return true;
+}
+
+template <typename allocator, ::std::size_t align, ::std::size_t sz, ::std::size_t block_size, typename dequecontroltype>
+inline constexpr void deque_reserve_front_spaces(dequecontroltype &controller, ::std::size_t n)
+{
+	if (!n)
+	{
+		return;
+	}
+	auto front_curr_ptr{controller.front_block.curr_ptr};
+	::std::size_t blocksn{static_cast<::std::size_t>(front_curr_ptr - controller.front_block.begin_ptr)};
+	if (n <= blocksn)
+	{
+		return;
+	}
+	::std::size_t startpos{static_cast<::std::size_t>(controller.front_end_ptr - front_curr_ptr)};
+	::std::size_t nmblocksn{n - blocksn};
+	::std::size_t front_more_blocks{nmblocksn / block_size};
+	::std::size_t const front_more_blocks_mod{nmblocksn % block_size};
+	::std::size_t toallocate{front_more_blocks};
+	if (front_more_blocks_mod)
+	{
+		++toallocate;
+	}
+	if consteval
+	{
+		::fast_io::containers::details::deque_reserve_front_blocks_impl<allocator>(controller,
+																				   toallocate, align, block_size);
+	}
+	else
+	{
+		constexpr ::std::size_t block_bytes{block_size * sz};
+		::fast_io::containers::details::deque_reserve_front_blocks_impl<allocator>(*reinterpret_cast<::fast_io::containers::details::deque_controller_common *>(
+																					   __builtin_addressof(controller)),
+																				   toallocate, align, block_bytes);
+	}
 }
 
 template <typename allocator, typename dequecontroltype>
@@ -2371,24 +2406,29 @@ private:
 			{
 				return {pos, this->begin() + pos};
 			}
-#if 0
+#if 1
 			size_type const half_size{old_size >> 1u};
 			if (pos < half_size)
 			{
-				
+				::fast_io::containers::details::deque_reserve_front_spaces<allocator,
+																		   alignof(value_type), sizeof(value_type), block_size>(this->controller, rgsize);
+				auto thisbg{this->begin()};
+				auto posit{thisbg + pos};
+				auto thisbgrgsize{thisbg - rgsize};
+				auto thisbgrgsizenew{::fast_io::freestanding::uninitialized_relocate(thisbg,
+																					 posit, thisbgrgsize)};
+				::fast_io::freestanding::uninitialized_copy_n(::std::ranges::cbegin(rg), rgsize, thisbgrgsizenew);
+
+				this->controller.front_block = thisbgrgsize.itercontent;
+				this->controller.front_end_ptr = thisbgrgsize.itercontent.begin_ptr + block_size;
+				return {pos, thisbgrgsizenew};
 			}
 			else
 #endif
 			{
-#if 0
-				::fast_io::io::debug_println(::std::source_location::current(), "\tthis->size()=", this->size(), " rgsize=", rgsize);
-#endif
 				::fast_io::containers::details::deque_reserve_back_spaces<allocator,
 																		  alignof(value_type), sizeof(value_type), block_size>(this->controller, rgsize);
 				auto posit{this->begin() + pos};
-#if 0
-				::fast_io::io::debug_println(::std::source_location::current(), "\tthis->size()=", this->size(), " rgsize=", rgsize);
-#endif
 				auto thisend{this->end()};
 				auto thisendrgsize{thisend + rgsize};
 				::fast_io::freestanding::uninitialized_relocate_backward(posit,
