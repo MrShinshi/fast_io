@@ -426,7 +426,6 @@ inline constexpr auto operator<=>(::fast_io::containers::details::deque_iterator
 	return block3way;
 }
 
-
 template <typename allocator, typename controllerblocktype>
 inline constexpr void deque_destroy_trivial_common_align(controllerblocktype &controller, ::std::size_t aligns, ::std::size_t totalsz) noexcept
 {
@@ -1398,6 +1397,33 @@ inline constexpr void deque_grow_front_common(dequecontroltype &controller) noex
 	::fast_io::containers::details::deque_grow_front_common_impl<allocator>(controller, align, blockbytes);
 }
 
+template <typename>
+struct is_fast_io_deque_iterator_impl : ::std::false_type
+{};
+
+template <typename U>
+struct is_fast_io_deque_iterator_impl<
+	::fast_io::containers::details::deque_iterator<U, false>> : ::std::true_type
+{};
+
+template <typename U>
+struct is_fast_io_deque_iterator_impl<
+	::fast_io::containers::details::deque_iterator<U, true>> : ::std::true_type
+{};
+
+template <typename T>
+concept is_fast_io_deque_iterator_v =
+	::fast_io::containers::details::is_fast_io_deque_iterator_impl<std::remove_cvref_t<T>>::value;
+
+template <typename Iter1, typename Sentinel, typename Iter2>
+	requires(::fast_io::containers::details::is_fast_io_deque_iterator_v<Iter1> ||
+			 ::fast_io::containers::details::is_fast_io_deque_iterator_v<Iter1>)
+inline constexpr Iter2 uninitialized_relocate_define(
+	::fast_io::operations::defines::memory_algorithm_define_type<Iter1, Sentinel, Iter2>,
+	Iter1 first, Sentinel last, Iter2 dest)
+{
+	return ::fast_io::freestanding::uninitialized_relocate_ignore_define(first, last, dest);
+}
 
 } // namespace details
 

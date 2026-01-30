@@ -40,23 +40,24 @@ namespace fast_io::freestanding
 /*
 uninitialized_relocate requires two range are not overlapped.
 */
-template <::std::input_or_output_iterator Iter1, ::std::input_or_output_iterator Iter2>
-inline constexpr Iter2 uninitialized_relocate(Iter1 first, Iter1 last, Iter2 dest) noexcept
+
+template <::std::input_or_output_iterator Iter1, ::std::sentinel_for<Iter1> Sent, ::std::input_or_output_iterator Iter2>
+inline constexpr Iter2 uninitialized_relocate_ignore_define(Iter1 first, Sent last, Iter2 dest) noexcept
 {
 	if constexpr (::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1> && ::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
 	{
-		return uninitialized_relocate(::std::to_address(first), ::std::to_address(last),
-									  ::std::to_address(dest)) -
+		return uninitialized_relocate_ignore_define(::std::to_address(first), ::std::to_address(last),
+													::std::to_address(dest)) -
 			   ::std::to_address(dest) + dest;
 	}
 	else if constexpr (::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1>)
 	{
-		return uninitialized_relocate(::std::to_address(first), ::std::to_address(last),
-									  dest);
+		return uninitialized_relocate_ignore_define(::std::to_address(first), ::std::to_address(last),
+													dest);
 	}
 	else if constexpr (::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
 	{
-		return uninitialized_relocate(first, last, ::std::to_address(dest)) -
+		return uninitialized_relocate_ignore_define(first, last, ::std::to_address(dest)) -
 			   ::std::to_address(dest) + dest;
 	}
 	else
@@ -80,10 +81,6 @@ inline constexpr Iter2 uninitialized_relocate(Iter1 first, Iter1 last, Iter2 des
 				return reinterpret_cast<Iter2>(::fast_io::freestanding::bytes_copy(reinterpret_cast<::std::byte const *>(first), reinterpret_cast<::std::byte const *>(last), reinterpret_cast<::std::byte *>(dest)));
 			}
 		}
-		else if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_define<Iter1, Iter1, Iter2>)
-		{
-			return uninitialized_relocate_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
-		}
 		// we do not allow move constructor to throw EH.
 		while (first != last)
 		{
@@ -104,6 +101,41 @@ inline constexpr Iter2 uninitialized_relocate(Iter1 first, Iter1 last, Iter2 des
 			++dest;
 		}
 		return dest;
+	}
+}
+
+template <::std::input_or_output_iterator Iter1, ::std::sentinel_for<Iter1> Snt, ::std::input_or_output_iterator Iter2>
+inline constexpr Iter2 uninitialized_relocate(Iter1 first, Snt last, Iter2 dest) noexcept
+{
+	if constexpr (
+		::std::same_as<Iter1, Snt> && ::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1> && ::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
+	{
+		return uninitialized_relocate(::std::to_address(first), ::std::to_address(last),
+									  ::std::to_address(dest)) -
+			   ::std::to_address(dest) + dest;
+	}
+	else if constexpr (::std::same_as<Iter1, Snt> && ::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1>)
+	{
+		return uninitialized_relocate(::std::to_address(first), ::std::to_address(last),
+									  dest);
+	}
+	else if constexpr (::std::same_as<Iter1, Snt> && ::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
+	{
+		return uninitialized_relocate(first, last, ::std::to_address(dest)) -
+			   ::std::to_address(dest) + dest;
+	}
+	else
+	{
+		using iter1valuetype = ::std::iter_value_t<Iter1>;
+		using iter2valuetype = ::std::iter_value_t<Iter2>;
+		if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_define<Iter1, Snt, Iter2>)
+		{
+			return uninitialized_relocate_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
+		}
+		else
+		{
+			return ::fast_io::freestanding::uninitialized_relocate_ignore_define(first, last, dest);
+		}
 	}
 }
 
@@ -173,11 +205,12 @@ inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, 
 			}
 		}
 		// Custom relocate_backward hook for user-defined types
+#if 0
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_backward_define<Iter1, Iter1, Iter2>)
 		{
 			return uninitialized_relocate_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
 		}
-
+#endif
 		// Generic slow path:
 		//   Move-construct elements in reverse order into uninitialized memory,
 		//   then destroy the original elements.
@@ -245,10 +278,12 @@ inline constexpr Iter2 uninitialized_move(Iter1 first, Iter1 last, Iter2 dest) n
 				return reinterpret_cast<Iter2>(::fast_io::freestanding::bytes_copy(reinterpret_cast<::std::byte const *>(first), reinterpret_cast<::std::byte const *>(last), reinterpret_cast<::std::byte *>(dest)));
 			}
 		}
+#if 0
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_move_define<Iter1, Iter1, Iter2>)
 		{
 			return uninitialized_move_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
 		}
+#endif
 		// we do not allow move constructor to throw EH.
 		while (first != last)
 		{
@@ -303,10 +338,12 @@ inline constexpr Iter2 uninitialized_move_backward(Iter1 first, Iter1 last, Iter
 				return d_start;
 			}
 		}
+#if 0
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_move_backward_define<Iter1, Iter1, Iter2>)
 		{
 			return uninitialized_move_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, d_last);
 		}
+#endif
 		while (first != last)
 		{
 			::std::construct_at(--d_last, std::move(*(--last)));
