@@ -4,23 +4,32 @@ namespace fast_io::operations::defines
 {
 
 template <typename Iter1, typename Snt, typename Iter2>
+struct memory_algorithm_define_type
+{
+	explicit constexpr memory_algorithm_define_type() noexcept = default;
+};
+
+template <typename Iter1, typename Snt, typename Iter2>
+inline constexpr memory_algorithm_define_type<Iter1, Snt, Iter2> memory_algorithm_define{};
+
+template <typename Iter1, typename Snt, typename Iter2>
 concept has_uninitialized_relocate_define = ::std::sentinel_for<Snt, Iter1> && requires(Iter1 first, Snt last, Iter2 dest) {
-	{ uninitialized_relocate_define(first, last, dest) } -> ::std::same_as<Iter2>;
+	{ uninitialized_relocate_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest) } -> ::std::same_as<Iter2>;
 };
 
 template <typename Iter1, typename Snt, typename Iter2>
 concept has_uninitialized_relocate_backward_define = ::std::sentinel_for<Snt, Iter1> && requires(Iter1 first, Snt last, Iter2 dest) {
-	{ uninitialized_relocate_backward_define(first, last, dest) } -> ::std::same_as<Iter2>;
+	{ uninitialized_relocate_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest) } -> ::std::same_as<Iter2>;
 };
 
 template <typename Iter1, typename Snt, typename Iter2>
 concept has_uninitialized_move_define = ::std::sentinel_for<Snt, Iter1> && requires(Iter1 first, Snt last, Iter2 dest) {
-	{ uninitialized_move_define(first, last, dest) } -> ::std::same_as<Iter2>;
+	{ uninitialized_move_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest) } -> ::std::same_as<Iter2>;
 };
 
 template <typename Iter1, typename Snt, typename Iter2>
 concept has_uninitialized_move_backward_define = ::std::sentinel_for<Snt, Iter1> && requires(Iter1 first, Snt last, Iter2 dest) {
-	{ uninitialized_move_backward_define(first, last, dest) } -> ::std::same_as<Iter2>;
+	{ uninitialized_move_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest) } -> ::std::same_as<Iter2>;
 };
 
 } // namespace fast_io::operations::defines
@@ -73,7 +82,7 @@ inline constexpr Iter2 uninitialized_relocate(Iter1 first, Iter1 last, Iter2 des
 		}
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_define<Iter1, Iter1, Iter2>)
 		{
-			return uninitialized_relocate_define(first, last, dest);
+			return uninitialized_relocate_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
 		}
 		// we do not allow move constructor to throw EH.
 		while (first != last)
@@ -166,7 +175,7 @@ inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, 
 		// Custom relocate_backward hook for user-defined types
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_backward_define<Iter1, Iter1, Iter2>)
 		{
-			return uninitialized_relocate_backward_define(first, last, dest);
+			return uninitialized_relocate_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
 		}
 
 		// Generic slow path:
@@ -238,7 +247,7 @@ inline constexpr Iter2 uninitialized_move(Iter1 first, Iter1 last, Iter2 dest) n
 		}
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_move_define<Iter1, Iter1, Iter2>)
 		{
-			return uninitialized_move_define(first, last, dest);
+			return uninitialized_move_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
 		}
 		// we do not allow move constructor to throw EH.
 		while (first != last)
@@ -296,7 +305,7 @@ inline constexpr Iter2 uninitialized_move_backward(Iter1 first, Iter1 last, Iter
 		}
 		else if constexpr (::fast_io::operations::defines::has_uninitialized_move_backward_define<Iter1, Iter1, Iter2>)
 		{
-			return uninitialized_move_backward_define(first, last, d_last);
+			return uninitialized_move_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, d_last);
 		}
 		while (first != last)
 		{
