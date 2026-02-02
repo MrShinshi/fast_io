@@ -903,7 +903,7 @@ deque_copy_impl(Itercontent first, Itercontent last,
 		{
 			tocopy = dest_block_to_end;
 		}
-		::fast_io::freestanding::overlapped_copy_n(firstcurrptr, tocopy, destcurrptr);
+		::fast_io::freestanding::copy_n(firstcurrptr, tocopy, destcurrptr);
 		if (0 < cmp)
 		{
 			dest.curr_ptr = (dest.begin_ptr = (*++dest.controller_ptr));
@@ -965,8 +965,8 @@ deque_copy_backward_impl(Itercontent first, Itercontent last,
 		{
 			tocopy = dest_block_to_begin;
 		}
-		::fast_io::freestanding::overlapped_copy_n(lastcurrptr - tocopy, tocopy,
-												   destcurrptr - tocopy);
+		::fast_io::freestanding::copy_backward(lastcurrptr - tocopy, lastcurrptr,
+											   destcurrptr);
 		if (0 < cmp)
 		{
 			dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
@@ -1422,6 +1422,7 @@ inline constexpr Iter2 uninitialized_relocate_define(
 	::fast_io::operations::defines::memory_algorithm_define_type<Iter1, Sentinel, Iter2>,
 	Iter1 first, Sentinel last, Iter2 dest)
 {
+
 	return ::fast_io::freestanding::uninitialized_relocate_ignore_define(first, last, dest);
 }
 

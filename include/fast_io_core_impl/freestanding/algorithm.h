@@ -436,7 +436,8 @@ inline constexpr output_iter non_overlapped_copy(input_iter first, input_iter la
 }
 
 template <::std::contiguous_iterator input_iter, ::std::contiguous_iterator output_iter>
-	requires(::std::same_as<::std::iter_value_t<input_iter>, ::std::iter_value_t<output_iter>>)
+	requires(::std::same_as<::std::iter_value_t<input_iter>, ::std::iter_value_t<output_iter>> &&
+			 ::std::is_trivially_copyable_v<::std::iter_value_t<input_iter>>)
 inline constexpr output_iter overlapped_copy(input_iter first, input_iter last, output_iter result)
 {
 	if (__builtin_is_constant_evaluated())
@@ -485,7 +486,8 @@ inline constexpr output_iter overlapped_copy(input_iter first, input_iter last, 
 }
 
 template <::std::contiguous_iterator input_iter, ::std::contiguous_iterator output_iter>
-	requires(::std::same_as<::std::iter_value_t<input_iter>, ::std::iter_value_t<output_iter>>)
+	requires(::std::same_as<::std::iter_value_t<input_iter>, ::std::iter_value_t<output_iter>> &&
+			 ::std::is_trivially_copyable_v<::std::iter_value_t<input_iter>>)
 inline output_iter overlapped_copy_n(input_iter first, ::std::size_t count, output_iter result)
 {
 	if (__builtin_is_constant_evaluated())
