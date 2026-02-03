@@ -139,8 +139,8 @@ inline constexpr Iter2 uninitialized_relocate(Iter1 first, Snt last, Iter2 dest)
 	}
 }
 
-template <::std::bidirectional_iterator Iter1, ::std::bidirectional_iterator Iter2>
-inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, Iter2 dest) noexcept
+template <::std::bidirectional_iterator Iter1, ::std::sentinel_for<Iter1> Snt, ::std::bidirectional_iterator Iter2>
+inline constexpr Iter2 uninitialized_relocate_backward_ignore_define(Iter1 first, Snt last, Iter2 dest) noexcept
 {
 	// Semantics:
 	//   Relocate the range [first, last) into the uninitialized memory ending at `dest`.
@@ -151,22 +151,22 @@ inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, 
 	if constexpr (::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1> &&
 				  ::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
 	{
-		return uninitialized_relocate_backward(::std::to_address(first),
-											   ::std::to_address(last),
-											   ::std::to_address(dest)) -
+		return uninitialized_relocate_backward_ignore_define(::std::to_address(first),
+															 ::std::to_address(last),
+															 ::std::to_address(dest)) -
 			   ::std::to_address(dest) + dest;
 	}
 	else if constexpr (::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1>)
 	{
-		return uninitialized_relocate_backward(::std::to_address(first),
-											   ::std::to_address(last),
-											   dest);
+		return uninitialized_relocate_backward_ignore_define(::std::to_address(first),
+															 ::std::to_address(last),
+															 dest);
 	}
 	else if constexpr (::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
 	{
-		return uninitialized_relocate_backward(first,
-											   last,
-											   ::std::to_address(dest)) -
+		return uninitialized_relocate_backward_ignore_define(first,
+															 last,
+															 ::std::to_address(dest)) -
 			   ::std::to_address(dest) + dest;
 	}
 	else
@@ -204,13 +204,6 @@ inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, 
 				return reinterpret_cast<Iter2>(destfirst);
 			}
 		}
-		// Custom relocate_backward hook for user-defined types
-#if 0
-		else if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_backward_define<Iter1, Iter1, Iter2>)
-		{
-			return uninitialized_relocate_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
-		}
-#endif
 		// Generic slow path:
 		//   Move-construct elements in reverse order into uninitialized memory,
 		//   then destroy the original elements.
@@ -235,6 +228,52 @@ inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Iter1 last, 
 
 		// Return the begin iterator of the relocated range
 		return dest;
+	}
+}
+
+template <::std::bidirectional_iterator Iter1, ::std::sentinel_for<Iter1> Snt, ::std::bidirectional_iterator Iter2>
+inline constexpr Iter2 uninitialized_relocate_backward(Iter1 first, Snt last, Iter2 dest) noexcept
+{
+	// Semantics:
+	//   Relocate the range [first, last) into the uninitialized memory ending at `dest`.
+	//   `dest` is treated as the end iterator (one past the last element) of the destination range.
+	//   The function returns the begin iterator of the destination range:
+	//       dest - (last - first)
+
+	if constexpr (::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1> &&
+				  ::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
+	{
+		return uninitialized_relocate_backward(::std::to_address(first),
+											   ::std::to_address(last),
+											   ::std::to_address(dest)) -
+			   ::std::to_address(dest) + dest;
+	}
+	else if constexpr (::std::contiguous_iterator<Iter1> && !::std::is_pointer_v<Iter1>)
+	{
+		return uninitialized_relocate_backward(::std::to_address(first),
+											   ::std::to_address(last),
+											   dest);
+	}
+	else if constexpr (::std::contiguous_iterator<Iter2> && !::std::is_pointer_v<Iter2>)
+	{
+		return uninitialized_relocate_backward(first,
+											   last,
+											   ::std::to_address(dest)) -
+			   ::std::to_address(dest) + dest;
+	}
+	else
+	{
+		using iter1valuetype = ::std::iter_value_t<Iter1>;
+		using iter2valuetype = ::std::iter_value_t<Iter2>;
+
+		if constexpr (::fast_io::operations::defines::has_uninitialized_relocate_backward_define<Iter1, Iter1, Iter2>)
+		{
+			return uninitialized_relocate_backward_define(::fast_io::operations::defines::memory_algorithm_define<Iter1, Snt, Iter2>, first, last, dest);
+		}
+		else
+		{
+			return ::fast_io::freestanding::uninitialized_relocate_backward_ignore_define(first, last, dest);
+		}
 	}
 }
 
