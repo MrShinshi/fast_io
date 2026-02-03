@@ -1000,6 +1000,137 @@ deque_copy_backward_impl(Itercontent first, Itercontent last,
 	return dest;
 }
 
+
+template <typename Itercontent>
+inline constexpr Itercontent
+deque_relocate_impl(Itercontent first, Itercontent last,
+					Itercontent dest, ::std::size_t blocksize)
+{
+	if (first.curr_ptr == last.curr_ptr)
+	{
+		return dest;
+	}
+	for (;;)
+	{
+		decltype(first.begin_ptr) firstend;
+		if (first.controller_ptr == last.controller_ptr)
+		{
+			firstend = last.curr_ptr;
+		}
+		else
+		{
+			firstend = first.begin_ptr + blocksize;
+		}
+		auto firstcurrptr{first.curr_ptr};
+		::std::size_t const curr_block_to_end{
+			static_cast<::std::size_t>(firstend - firstcurrptr)};
+		auto destcurrptr{dest.curr_ptr};
+		::std::size_t const dest_block_to_end{
+			static_cast<::std::size_t>(dest.begin_ptr + blocksize - destcurrptr)};
+		auto cmp{curr_block_to_end <=> dest_block_to_end};
+		::std::size_t tocopy;
+		if (cmp < 0)
+		{
+			tocopy = curr_block_to_end;
+		}
+		else
+		{
+			tocopy = dest_block_to_end;
+		}
+		::fast_io::freestanding::uninitialized_relocate_ignore_define(firstcurrptr, firstcurrptr + tocopy, destcurrptr);
+		if (0 < cmp)
+		{
+			dest.curr_ptr = (dest.begin_ptr = (*++dest.controller_ptr));
+			first.curr_ptr += tocopy;
+		}
+		else
+		{
+			if (cmp < 0)
+			{
+				dest.curr_ptr += tocopy;
+			}
+			else if (cmp == 0)
+			{
+				dest.curr_ptr = (dest.begin_ptr = (*++dest.controller_ptr));
+			}
+			if (first.controller_ptr == last.controller_ptr)
+			{
+				break;
+			}
+			first.curr_ptr = (first.begin_ptr = (*++first.controller_ptr));
+		}
+	}
+	return dest;
+}
+
+template <typename Itercontent>
+inline constexpr Itercontent
+deque_relocate_backward_impl(Itercontent first, Itercontent last,
+							 Itercontent dest, ::std::size_t blocksize)
+{
+	if (first.curr_ptr == last.curr_ptr)
+	{
+		return dest;
+	}
+	for (;;)
+	{
+		decltype(first.begin_ptr) lastbegin;
+		if (first.controller_ptr == last.controller_ptr)
+		{
+			lastbegin = first.curr_ptr;
+		}
+		else
+		{
+			lastbegin = last.begin_ptr;
+		}
+		auto lastcurrptr{last.curr_ptr};
+		::std::size_t const curr_block_to_begin{
+			static_cast<::std::size_t>(lastcurrptr - lastbegin)};
+		auto destcurrptr{dest.curr_ptr};
+		::std::size_t const dest_block_to_begin{
+			static_cast<::std::size_t>(destcurrptr - dest.begin_ptr)};
+		auto cmp{curr_block_to_begin <=> dest_block_to_begin};
+		::std::size_t tocopy;
+		if (cmp < 0)
+		{
+			tocopy = curr_block_to_begin;
+		}
+		else
+		{
+			tocopy = dest_block_to_begin;
+		}
+		::fast_io::freestanding::uninitialized_relocate_backward_ignore_define(lastcurrptr - tocopy, lastcurrptr,
+																			   destcurrptr);
+		if (0 < cmp)
+		{
+			dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
+			last.curr_ptr -= tocopy;
+		}
+		else
+		{
+			if (cmp == 0)
+			{
+				if (last.controller_ptr == first.controller_ptr)
+				{
+					dest.curr_ptr = dest.begin_ptr;
+					break;
+				}
+				dest.curr_ptr = (dest.begin_ptr = (*--dest.controller_ptr)) + blocksize;
+			}
+			else
+			{
+				dest.curr_ptr -= tocopy;
+				if (last.controller_ptr == first.controller_ptr)
+				{
+					break;
+				}
+			}
+			last.curr_ptr = (last.begin_ptr = (*--last.controller_ptr)) + blocksize;
+		}
+	}
+	return dest;
+}
+
 inline ::fast_io::containers::details::deque_control_block_common
 deque_erase_common_trivial_impl(::fast_io::containers::details::deque_controller_common &controller,
 								::fast_io::containers::details::deque_control_block_common first,
@@ -1429,17 +1560,23 @@ inline constexpr Iter2 uninitialized_relocate_define(
 	using itvaltype2 = ::std::iter_value_t<Iter2>;
 	if !consteval
 	{
-		if constexpr (
-			::std::same_as<itvaltype1, itvaltype2> &&
-			::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<itvaltype1> &&
-			::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<itvaltype2>)
+		if constexpr (::std::same_as<itvaltype1, itvaltype2>)
 		{
-			return ::std::bit_cast<Iter2>(
-				::fast_io::containers::details::deque_copy_impl(
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(dest.itercontent),
-					::fast_io::containers::details::deque_block_bytes<sizeof(itvaltype1)>));
+			if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<itvaltype1>)
+			{
+				return ::std::bit_cast<Iter2>(
+					::fast_io::containers::details::deque_copy_impl(
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(dest.itercontent),
+						::fast_io::containers::details::deque_block_bytes<sizeof(itvaltype1)>));
+			}
+			else
+			{
+				return ::std::bit_cast<Iter2>(
+					::fast_io::containers::details::deque_relocate_impl(first.itercontent, last.itercontent, dest.itercontent,
+																		::fast_io::containers::details::deque_block_size<sizeof(itvaltype1)>));
+			}
 		}
 	}
 	return ::fast_io::freestanding::uninitialized_relocate_ignore_define(first, last, dest);
@@ -1456,20 +1593,26 @@ inline constexpr Iter2 uninitialized_relocate_backward_define(
 	using itvaltype2 = ::std::iter_value_t<Iter2>;
 	if !consteval
 	{
-		if constexpr (
-			::std::same_as<itvaltype1, itvaltype2> &&
-			::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<itvaltype1> &&
-			::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<itvaltype2>)
+		if constexpr (::std::same_as<itvaltype1, itvaltype2>)
 		{
-			return ::std::bit_cast<Iter2>(
-				::fast_io::containers::details::deque_copy_backward_impl(
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent),
-					::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(dest.itercontent),
-					::fast_io::containers::details::deque_block_bytes<sizeof(itvaltype1)>));
+			if constexpr (::fast_io::freestanding::is_trivially_copyable_or_relocatable_v<itvaltype1>)
+			{
+				return ::std::bit_cast<Iter2>(
+					::fast_io::containers::details::deque_copy_backward_impl(
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(first.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(last.itercontent),
+						::std::bit_cast<::fast_io::containers::details::deque_control_block_common>(dest.itercontent),
+						::fast_io::containers::details::deque_block_bytes<sizeof(itvaltype1)>));
+			}
+			else
+			{
+				return ::std::bit_cast<Iter2>(
+					::fast_io::containers::details::deque_relocate_backward_impl(first.itercontent, last.itercontent, dest.itercontent,
+																				 ::fast_io::containers::details::deque_block_size<sizeof(itvaltype1)>));
+			}
 		}
 	}
-	return ::fast_io::freestanding::uninitialized_relocate_ignore_define(first, last, dest);
+	return ::fast_io::freestanding::uninitialized_relocate_backward_ignore_define(first, last, dest);
 }
 
 } // namespace details
