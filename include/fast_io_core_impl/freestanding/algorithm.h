@@ -775,9 +775,12 @@ uninitialized_copy_n(InputIt first, ::std::size_t n, NoThrowForwardIt d_first) n
 		NoThrowForwardIt current;
 		inline constexpr ~destroyer() noexcept
 		{
-			for (; d_first != current; ++d_first)
+			if constexpr (!::std::is_trivially_destructible_v<T>)
 			{
-				d_first->~T();
+				for (; d_first != current; ++d_first)
+				{
+					d_first->~T();
+				}
 			}
 		}
 	};
