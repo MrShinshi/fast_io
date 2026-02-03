@@ -1372,7 +1372,6 @@ inline constexpr void deque_reserve_back_spaces(dequecontroltype &controller, ::
 	{
 		return;
 	}
-	::std::size_t startpos{static_cast<::std::size_t>(back_curr_ptr - controller.back_block.begin_ptr)};
 	::std::size_t nmblocksn{n - blocksn};
 	::std::size_t back_more_blocks{nmblocksn / block_size};
 	::std::size_t const back_more_blocks_mod{nmblocksn % block_size};
@@ -1483,7 +1482,6 @@ inline constexpr void deque_reserve_front_spaces(dequecontroltype &controller, :
 	{
 		return;
 	}
-	::std::size_t startpos{static_cast<::std::size_t>(controller.front_end_ptr - front_curr_ptr)};
 	::std::size_t nmblocksn{n - blocksn};
 	::std::size_t front_more_blocks{nmblocksn / block_size};
 	::std::size_t const front_more_blocks_mod{nmblocksn % block_size};
